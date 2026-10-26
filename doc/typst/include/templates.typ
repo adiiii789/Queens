@@ -101,3 +101,11 @@
   doc
 
 }
+
+
+
+#let abschnitt_von(name) = [
+  #text(style: "italic", fill: gray)[
+    Autor: #name
+  ]
+]

@@ -45,7 +45,7 @@
   ),
   abgabedatum: abgabedatum,
   bearbeitungszeitraum: "05.12.2026 - 08.12.2026",
-  martikelnummer: "xxxxxxx ♠, xxxxxxx ♥, 1306243 ♦, \n                                                                 xxxxxxx ♣",
+  martikelnummer: "5337368 ♠, 4898576 ♥, 1306243 ♦, \n                                                                 7200707 ♣",
   kurs: "TINF24IN"
 )
 
@@ -177,30 +177,16 @@
 // TEXT
 ////////////////////////////////
 
-= Einleitung
-== Motivation
-== Spielregeln Queens
+#include "1_einleitung.typ"
+#pagebreak()
 
-= Architektur (8 Punkte)
-== Allgemein
-=== Wie ist die Lösung aufgebaut?
-=== Warum wurde so entschieden? (Architectural Decisions)
-== Systemkomponenten
-=== Aus welchen Komponenten besteht die Lösung?
-=== Wie interagieren die Komponenten?
-== Anforderungen
-== Funktional / nicht-funktional
+#include "2_architektur.typ"
+#pagebreak()
 
-= Umsetzung (8 Punkte)
-== Implementierung
-=== Wie wird die Architektur umgesetzt?
-=== Welche Schwierigkeiten gab es und wie wurden diese gelöst?
-== Mögliche Alternativen
+#include "3_umsetzung.typ"
+#pagebreak()
 
-= Reflexion (4 Punkte)
-== Was würde man nach dem Projekt anders machen?
-== Was waren die größten Herausforderungen und wie wurden diese gelöst?
-
+#include "4_reflexion.typ"
 #pagebreak()
 
 ////////////////////////////////
