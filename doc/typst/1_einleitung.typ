@@ -8,7 +8,12 @@
 #abschnitt_von("Jannis")
 
 
-== Das Spiel "Queens"
+== Zielsetzung und Abgrenzung
+
+#abschnitt_von("Jannis")
+
+
+== Spielprinzip von "Queens"
 - Spielregeln
 - Sonderkartentabelle
 

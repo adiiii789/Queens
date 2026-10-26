@@ -1,6 +1,15 @@
 #import "include/templates.typ": abschnitt_von
 
 
+= Anforderungen
+== Funktionale Anforderungen
+
+== Nicht-funktionale Anforderungen
+
+- Skalierbarkeit
+- Ausfallsicherheit
+
+
 = Architektur (8 Punkte)
 
 == Allgemein
@@ -21,11 +30,3 @@ Siehe @architekturmodell usw.
 == Systemkomponenten
 - Aus welchen Komponenten besteht die Lösung?
 - Wie interagieren die Komponenten?
-
-== Anforderungen
-=== Funktionale Anforderungen
-
-=== Nicht-funktionale Anforderungen
-
-- Skalierbarkeit
-- Ausfallsicherheit
