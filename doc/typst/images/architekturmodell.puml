@@ -1,0 +1,54 @@
+@startuml architektur_ueberblick
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam nodesep 50
+skinparam ranksep 60
+skinparam package {
+  BackgroundColor #FAFAF8
+  BorderColor #888780
+}
+skinparam component {
+  BackgroundColor<<Client>> #F1EFE8
+  BorderColor<<Client>> #5F5E5A
+  BackgroundColor<<Microservice>> #EEEDFE
+  BorderColor<<Microservice>> #534AB7
+  BackgroundColor<<Raft-Knoten>> #E1F5EE
+  BorderColor<<Raft-Knoten>> #0F6E56
+}
+skinparam database {
+  BackgroundColor #FAEEDA
+  BorderColor #854F0B
+}
+
+
+component "Clients\n(2–8 Spieler)" as CL <<Client>>
+
+package "Backend (Python / FastAPI)" {
+  component "Realtime-Gateway" as GW <<Microservice>>
+
+  package "Lobby-Service-Cluster (n Instanzen, Standard 2)" as LC {
+    component "Lobby-Service 1" as L1 <<Microservice>>
+    component "Lobby-Service 2 … n" as L2 <<Microservice>>
+  }
+
+  database "PostgreSQL\n\nLobbys · Spieler\nSpielergebnisse" as DB
+
+  package "Game-Service-Cluster (Raft, n Instanzen, Standard 3)" as GA {
+    component "Game-Service 1\n(Leader)" as N1 <<Raft-Knoten>>
+    component "Game-Service 2\n(Follower)" as N2 <<Raft-Knoten>>
+    component "Game-Service 3 … n\n(Follower)" as N3 <<Raft-Knoten>>
+  }
+}
+
+CL <--> GW : WebSocket
+GW --> LC : REST\n(reihum + Failover)
+GW --> N1 : Spielaktionen
+LC --> N1 : Spiel anlegen
+L1 --> DB : SQL
+L2 --> DB : SQL
+N1 --> DB : Ergebnis speichern
+N1 --> N2 : Replikation
+N1 --> N3 : Replikation
+@enduml
