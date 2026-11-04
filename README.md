@@ -10,7 +10,7 @@ und Frontend sind als Platzhalter mit klaren Schnittstellen angelegt.
 ```bash
 python -m pip install -r requirements.txt
 python cli.py          # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
-pytest                 # Unit-Tests der Spiellogik
+pytest                 # Tests (DB-Tests brauchen PostgreSQL, s. u.)
 ```
 
 Python ≥ 3.10. Die Spiellogik selbst braucht keine externen Pakete.
@@ -72,9 +72,52 @@ Sie bekommt Aktionen immer nacheinander. Die Reihenfolge legt das Backend fest
 - Leerer Ziehstapel: Ablagestapel (ohne oberste Karte) wird neu gemischt
 - Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen
 
+## PostgreSQL einrichten
+
+Lobby-Service und Ergebnisse brauchen eine zentrale PostgreSQL (ab Version 13).
+Benutzer `queens`, Passwort `queens`, Datenbanken `queens` (Betrieb) und
+`queens_test` (Tests). Das Schema legen die Dienste beim Start selbst an
+(`services/schema.sql`).
+
+**Mit Docker:**
+
+```bash
+docker run -d --name queens-pg -p 5432:5432 -e POSTGRES_USER=queens \
+    -e POSTGRES_PASSWORD=queens -e POSTGRES_DB=queens postgres:16-alpine
+docker exec queens-pg psql -U queens -c "CREATE DATABASE queens_test"
+```
+
+**Mit lokaler Installation** (als Superuser, z. B. `psql -U postgres`):
+
+```sql
+CREATE USER queens WITH PASSWORD 'queens';
+CREATE DATABASE queens OWNER queens;
+CREATE DATABASE queens_test OWNER queens;
+```
+
+Andere Adresse: `--db postgresql://user:pw@host:5432/queens` bzw. Umgebungsvariable
+`QUEENS_DB`; für die Tests `QUEENS_TEST_DB`. Ohne erreichbare Testdatenbank werden
+die Datenbank-, Lobby- und Gateway-Tests übersprungen.
+
+## Lobby und Gateway starten
+
+```bash
+# zwei Lobby-Instanzen (Ports 8001, 8002), Cluster "a" mit drei Raft-Knoten
+python -m services.lobby.app --id l1 --clusters "a=http://127.0.0.1:8101|http://127.0.0.1:8102|http://127.0.0.1:8103"
+python -m services.lobby.app --id l2 --clusters "a=http://127.0.0.1:8101|http://127.0.0.1:8102|http://127.0.0.1:8103"
+# Gateway (Port 8000), verteilt Lobby-Anfragen reihum
+python -m services.gateway.app --lobby http://127.0.0.1:8001,http://127.0.0.1:8002
+```
+
+Optionen des Gateways: `--host 0.0.0.0` (für andere Rechner), `--turn-timeout 60`,
+`--afk-timeout 15` (Spieler am Zug getrennt), `--peek-timeout 60`.
+Die Endpunkte und Nachrichten stehen in den Docstrings von
+`services/lobby/app.py` und `services/gateway/app.py`.
+
+Solange `services/raft/client.py` fehlt, nutzen Lobby und Gateway den
+`StubClusterClient` aus `services/cluster_stub.py` (Partien nur im Prozess).
+
 ## Nächste Schritte
 
-1. Gateway: WebSocket-Endpunkt mit `LocalGameBackend` umsetzen
-2. Frontend: Spieltisch im Browser
-3. Lobby-Service
-4. Raft-Knoten, danach `LocalGameBackend` durch `RaftGameBackend` ersetzen
+1. Frontend: Spieltisch im Browser
+2. Raft-Knoten und `ClusterClient` (ersetzen den Stub)
