@@ -30,12 +30,15 @@ class HttpTransport:
     """RPCs als HTTP-POST. `isolated = True` trennt den Knoten für die Demo
     vom Netz: Er sendet nichts mehr (und der Server lehnt Eingehendes ab)."""
 
-    def __init__(self, nodes: Mapping[str, str], timeout: float = 1.0) -> None:
+    def __init__(self, nodes: Mapping[str, str], timeout: float = 1.0,
+                 http_transport: Any = None) -> None:
+        """`http_transport`: optionaler httpx-Transport (Tests ohne Sockets)."""
         import httpx
 
         self.nodes = {node_id: url.rstrip("/") for node_id, url in nodes.items()}
         self.isolated = False
-        self._http = httpx.AsyncClient(timeout=httpx.Timeout(timeout))
+        self._http = httpx.AsyncClient(timeout=httpx.Timeout(timeout),
+                                       transport=http_transport)
         self._errors = (httpx.HTTPError, ValueError)
 
     async def call(self, peer: str, rpc: str, payload: dict) -> dict | None:
