@@ -54,6 +54,31 @@ Gleichzeitige Aktionen (z. B. Zwischenwerfen) muss die Engine nicht lösen:
 Sie bekommt Aktionen immer nacheinander. Die Reihenfolge legt das Backend fest
 (lokal per Lock, später der Raft-Leader über das Log).
 
+## Backend starten und Ausfall-Demo
+
+```bash
+python run_local.py                        # 3 Raft-Knoten, 2 Lobby-Instanzen, Gateway
+python run_local.py --nodes 5 --lobbies 3  # größerer Cluster
+python run_local.py --public               # Gateway für andere Rechner erreichbar
+```
+
+Jeder Dienst läuft als eigener Prozess (Logs in `logs/`). Ports: Gateway 8000,
+Lobby-Instanz i = 8000 + i, Raft-Knoten n = 8100 + n. Danach steuert die
+Admin-Konsole die Demo (`status`, `kill 2`, `start 2`, `isolate 1`, `heal 1`,
+`ergebnisse`, `log l1`, `quit`). Der komplette Ablauf für die Vorstellung steht
+in [doc/demo_ablauf.md](doc/demo_ablauf.md), die Messwerte in
+[doc/testprotokoll.md](doc/testprotokoll.md).
+
+Einzelner Raft-Knoten von Hand:
+
+```bash
+python -m services.raft.server --id 1 --nodes "1=http://127.0.0.1:8101,2=http://127.0.0.1:8102,3=http://127.0.0.1:8103"
+```
+
+Optionen: `--election-min 1.5 --election-max 3.0` (Election-Timeout in s),
+`--heartbeat 0.3`, `--rpc-timeout 1.0`, `--data-dir <ordner>` (Term und Stimme
+speichern), `--host 0.0.0.0`. `GET /status` zeigt Rolle, Term, Leader und Log.
+
 ## Spielregeln (umgesetzt)
 
 - 2–8 Spieler, 52er-Blatt, je 4 verdeckte Karten, eine Karte offen auf der Ablage
