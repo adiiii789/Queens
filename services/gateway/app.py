@@ -27,6 +27,8 @@ WebSocket-Protokoll (/ws, JSON mit Feld `op`):
     state        {"view", "timeout"}                eigene Sicht + Restzeit in s
     info         {"message"}
     error        {"message"}                        nur an den Absender
+
+Browser-Client: GET / liefert client/web/ aus (gleiches Protokoll über /ws).
 """
 
 from __future__ import annotations
@@ -40,10 +42,12 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 
 from queens_engine import SYSTEM_PLAYER
 
@@ -53,6 +57,7 @@ from ..netconfig import setup_logging
 log = logging.getLogger("gateway")
 
 TURN_PHASES = ("await_draw", "await_decision", "await_special")
+WEB_DIR = Path(__file__).resolve().parents[2] / "client" / "web"
 
 
 def events_for(player_id: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -602,6 +607,10 @@ def create_app(lobby_urls: list[str], factory: Optional[ClusterFactory] = None,
                 "connected": sum(s.ws is not None for s in gateway.sessions.values()),
                 "games": sum(not g.finished for g in gateway.games.values()),
                 "lobbies": gateway.lobby.urls}
+
+    # Zuletzt einhängen, damit /ws und /health Vorrang haben.
+    if WEB_DIR.is_dir():
+        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
     return app
 

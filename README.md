@@ -34,6 +34,11 @@ services/
   lobby/app.py            PLATZHALTER: Lobby, Ready-Status
   raft/node.py            PLATZHALTER: Raft-Knoten + RaftGameBackend
 
+client/
+  cli.py                  Terminal-Client für das Gateway (python -m client.cli)
+  render.py               Texte für Ereignisse, Lobby, Tisch und Auflösung
+  web/                    Browser-Client (funktional), vom Gateway unter / ausgeliefert
+netcheck.py               Netzwerk-Check für Host und Client
 frontend/                 PLATZHALTER: Browser-Client
 hotseat.py                Terminal-Testmodus (Hotseat, ohne Netzwerk)
 tests/test_engine.py      Unit-Tests
@@ -117,6 +122,41 @@ Die Endpunkte und Nachrichten stehen in den Docstrings von
 
 Solange `services/raft/client.py` fehlt, nutzen Lobby und Gateway den
 `StubClusterClient` aus `services/cluster_stub.py` (Partien nur im Prozess).
+
+## Spielen
+
+Wenn das Backend läuft (z. B. `python run_local.py`), verbindet sich jeder
+Spieler mit dem Gateway:
+
+```bash
+python -m client.cli --server ws://127.0.0.1:8000/ws --name Anna
+```
+
+oder im Browser: `http://127.0.0.1:8000/` (vier Tabs = vier Spieler).
+
+Befehle im Terminal (`h` zeigt sie auch im Spiel):
+
+| Lobby | Spiel (Slots ab 0, Spieler als Nummer aus der Tabelle) | Sonst |
+| --- | --- | --- |
+| `neu` Lobby anlegen | `p <slot> <slot>` Startkarten ansehen | `tisch` neu anzeigen |
+| `join <code>` beitreten | `z` ziehen · `a` Ablage nehmen | `h` Hilfe |
+| `bereit` / `nicht` | `t <slot>` tauschen · `w` ablegen | `q` beenden |
+| `verlassen` | `b <sp> <slot> <sp> <slot>` Bube · `k <sp> <slot>` König · `s` überspringen | |
+| | `klopf` klopfen · `x <slot>` zwischenwerfen | |
+
+Bricht die Verbindung ab, verbindet sich der Client selbst neu. Nach einem
+Neustart mit `--player-id <id>` (wird beim Anmelden und Beenden angezeigt)
+ist man wieder im laufenden Spiel; im Browser reicht Neuladen.
+
+**Über mehrere Rechner:** Backend mit `python run_local.py --public` starten.
+Auf dem Host zeigt `python netcheck.py host` die IP-Adressen und die
+Client-Befehle; auf jedem Spieler-Rechner prüft
+`python netcheck.py client <ip-des-hosts>` die Verbindung und erklärt
+Fehler (Firewall, falsches Netz, Gateway läuft nicht).
+
+## Nächste Schritte
+
+1. Browser-Client gestalten (Aufbau und `client/web/protocol.js` bleiben)
 
 ## Nächste Schritte
 
