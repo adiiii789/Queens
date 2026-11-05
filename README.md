@@ -9,7 +9,7 @@ und Frontend sind als Platzhalter mit klaren Schnittstellen angelegt.
 
 ```bash
 python -m pip install -r requirements.txt
-python cli.py          # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
+python hotseat.py      # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
 pytest                 # Tests (DB-Tests brauchen PostgreSQL, s. u.)
 ```
 
@@ -35,7 +35,7 @@ services/
   raft/node.py            PLATZHALTER: Raft-Knoten + RaftGameBackend
 
 frontend/                 PLATZHALTER: Browser-Client
-cli.py                    Terminal-Testmodus
+hotseat.py                Terminal-Testmodus (Hotseat, ohne Netzwerk)
 tests/test_engine.py      Unit-Tests
 ```
 
