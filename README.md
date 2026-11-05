@@ -70,7 +70,8 @@ Sie bekommt Aktionen immer nacheinander. Die Reihenfolge legt das Backend fest
   - Karten des Klopfenden sind ab dann gesperrt (abschaltbar in `config.py`)
 - Werte: Dame −1, Ass 1, Zahlen nach Augenwert, Bube/König 10; niedrigste Summe gewinnt
 - Leerer Ziehstapel: Ablagestapel (ohne oberste Karte) wird neu gemischt
-- Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen
+- Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen; in der
+  Startphase verzichten Spieler, die noch nicht angesehen haben, aufs Ansehen
 
 ## PostgreSQL einrichten
 

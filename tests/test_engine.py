@@ -192,6 +192,22 @@ def test_timeout_discards_drawn_card_and_rejects_stale_timeout():
         apply(state, TurnTimeout(player_id=SYSTEM_PLAYER, turn_number=turn))
 
 
+def test_peek_timeout_skips_late_players_and_starts_first_turn():
+    state = create_game("g", [("p1", "A"), ("p2", "B"), ("p3", "C")])
+    state, _ = apply(state, StartGame(player_id="p1", seed="x"))
+    state, _ = apply(state, PeekInitial(player_id="p2", slots=(0, 1)))
+    state, events = apply(state, TurnTimeout(player_id=SYSTEM_PLAYER, turn_number=0))
+    skipped = next(e for e in events if e.type == "PeekTimedOut")
+    assert skipped.data["player_ids"] == ["p1", "p3"]
+    assert state.phase == Phase.AWAIT_DRAW and state.turn_number == 1
+    assert state.current_player.player_id == "p1"
+    with pytest.raises(RuleViolation):
+        apply(state, PeekInitial(player_id="p1", slots=(0, 1)))
+    # derselbe Timeout ein zweites Mal (z. B. nach Leader-Wechsel) ist veraltet
+    with pytest.raises(RuleViolation):
+        apply(state, TurnTimeout(player_id=SYSTEM_PLAYER, turn_number=0))
+
+
 def test_view_hides_all_hand_cards():
     state = started()
     view = player_view(state, "p1")
