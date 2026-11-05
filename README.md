@@ -39,6 +39,7 @@ client/
   render.py               Texte für Ereignisse, Lobby, Tisch und Auflösung
   web/                    Browser-Client (funktional), vom Gateway unter / ausgeliefert
 netcheck.py               Netzwerk-Check für Host und Client
+frontend/                 PLATZHALTER: Browser-Client
 hotseat.py                Terminal-Testmodus (Hotseat, ohne Netzwerk)
 tests/test_engine.py      Unit-Tests
 ```
@@ -156,4 +157,8 @@ Fehler (Firewall, falsches Netz, Gateway läuft nicht).
 ## Nächste Schritte
 
 1. Browser-Client gestalten (Aufbau und `client/web/protocol.js` bleiben)
+
+## Nächste Schritte
+
+1. Frontend: Spieltisch im Browser
 2. Raft-Knoten und `ClusterClient` (ersetzen den Stub)
