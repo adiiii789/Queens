@@ -1,0 +1,13 @@
+/* Nur das Nötigste für die Bedienbarkeit; die eigentliche Gestaltung folgt. */
+body { font-family: system-ui, sans-serif; margin: 1rem; max-width: 60rem; }
+header { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; }
+[hidden] { display: none !important; }
+.player { display: flex; gap: .4rem; align-items: center; margin: .3rem 0; flex-wrap: wrap; }
+.player .name { min-width: 9rem; }
+.player.active .name { font-weight: bold; }
+.slot { min-width: 3rem; }
+.slot.selected { outline: 3px solid; }
+.slot.revealed { font-weight: bold; }
+#throw-mode[aria-pressed="true"] { outline: 3px solid; }
+#message { min-height: 1.2em; }
+#log { max-height: 16rem; overflow-y: auto; }
