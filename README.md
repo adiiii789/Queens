@@ -9,8 +9,8 @@ und Frontend sind als Platzhalter mit klaren Schnittstellen angelegt.
 
 ```bash
 python -m pip install -r requirements.txt
-python cli.py          # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
-pytest                 # Unit-Tests der Spiellogik
+python hotseat.py      # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
+pytest                 # Tests (DB-Tests brauchen PostgreSQL, s. u.)
 ```
 
 Python ≥ 3.10. Die Spiellogik selbst braucht keine externen Pakete.
@@ -34,8 +34,12 @@ services/
   lobby/app.py            PLATZHALTER: Lobby, Ready-Status
   raft/node.py            PLATZHALTER: Raft-Knoten + RaftGameBackend
 
-frontend/                 PLATZHALTER: Browser-Client
-cli.py                    Terminal-Testmodus
+client/
+  cli.py                  Terminal-Client für das Gateway (python -m client.cli)
+  render.py               Texte für Ereignisse, Lobby, Tisch und Auflösung
+  web/                    Browser-Client (funktional), vom Gateway unter / ausgeliefert
+netcheck.py               Netzwerk-Check für Host und Client
+hotseat.py                Terminal-Testmodus (Hotseat, ohne Netzwerk)
 tests/test_engine.py      Unit-Tests
 ```
 
@@ -70,11 +74,86 @@ Sie bekommt Aktionen immer nacheinander. Die Reihenfolge legt das Backend fest
   - Karten des Klopfenden sind ab dann gesperrt (abschaltbar in `config.py`)
 - Werte: Dame −1, Ass 1, Zahlen nach Augenwert, Bube/König 10; niedrigste Summe gewinnt
 - Leerer Ziehstapel: Ablagestapel (ohne oberste Karte) wird neu gemischt
-- Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen
+- Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen; in der
+  Startphase verzichten Spieler, die noch nicht angesehen haben, aufs Ansehen
+
+## PostgreSQL einrichten
+
+Lobby-Service und Ergebnisse brauchen eine zentrale PostgreSQL (ab Version 13).
+Benutzer `queens`, Passwort `queens`, Datenbanken `queens` (Betrieb) und
+`queens_test` (Tests). Das Schema legen die Dienste beim Start selbst an
+(`services/schema.sql`).
+
+**Mit Docker:**
+
+```bash
+docker run -d --name queens-pg -p 5432:5432 -e POSTGRES_USER=queens \
+    -e POSTGRES_PASSWORD=queens -e POSTGRES_DB=queens postgres:16-alpine
+docker exec queens-pg psql -U queens -c "CREATE DATABASE queens_test"
+```
+
+**Mit lokaler Installation** (als Superuser, z. B. `psql -U postgres`):
+
+```sql
+CREATE USER queens WITH PASSWORD 'queens';
+CREATE DATABASE queens OWNER queens;
+CREATE DATABASE queens_test OWNER queens;
+```
+
+Andere Adresse: `--db postgresql://user:pw@host:5432/queens` bzw. Umgebungsvariable
+`QUEENS_DB`; für die Tests `QUEENS_TEST_DB`. Ohne erreichbare Testdatenbank werden
+die Datenbank-, Lobby- und Gateway-Tests übersprungen.
+
+## Lobby und Gateway starten
+
+```bash
+# zwei Lobby-Instanzen (Ports 8001, 8002), Cluster "a" mit drei Raft-Knoten
+python -m services.lobby.app --id l1 --clusters "a=http://127.0.0.1:8101|http://127.0.0.1:8102|http://127.0.0.1:8103"
+python -m services.lobby.app --id l2 --clusters "a=http://127.0.0.1:8101|http://127.0.0.1:8102|http://127.0.0.1:8103"
+# Gateway (Port 8000), verteilt Lobby-Anfragen reihum
+python -m services.gateway.app --lobby http://127.0.0.1:8001,http://127.0.0.1:8002
+```
+
+Optionen des Gateways: `--host 0.0.0.0` (für andere Rechner), `--turn-timeout 60`,
+`--afk-timeout 15` (Spieler am Zug getrennt), `--peek-timeout 60`.
+Die Endpunkte und Nachrichten stehen in den Docstrings von
+`services/lobby/app.py` und `services/gateway/app.py`.
+
+Solange `services/raft/client.py` fehlt, nutzen Lobby und Gateway den
+`StubClusterClient` aus `services/cluster_stub.py` (Partien nur im Prozess).
+
+## Spielen
+
+Wenn das Backend läuft (z. B. `python run_local.py`), verbindet sich jeder
+Spieler mit dem Gateway:
+
+```bash
+python -m client.cli --server ws://127.0.0.1:8000/ws --name Anna
+```
+
+oder im Browser: `http://127.0.0.1:8000/` (vier Tabs = vier Spieler).
+
+Befehle im Terminal (`h` zeigt sie auch im Spiel):
+
+| Lobby | Spiel (Slots ab 0, Spieler als Nummer aus der Tabelle) | Sonst |
+| --- | --- | --- |
+| `neu` Lobby anlegen | `p <slot> <slot>` Startkarten ansehen | `tisch` neu anzeigen |
+| `join <code>` beitreten | `z` ziehen · `a` Ablage nehmen | `h` Hilfe |
+| `bereit` / `nicht` | `t <slot>` tauschen · `w` ablegen | `q` beenden |
+| `verlassen` | `b <sp> <slot> <sp> <slot>` Bube · `k <sp> <slot>` König · `s` überspringen | |
+| | `klopf` klopfen · `x <slot>` zwischenwerfen | |
+
+Bricht die Verbindung ab, verbindet sich der Client selbst neu. Nach einem
+Neustart mit `--player-id <id>` (wird beim Anmelden und Beenden angezeigt)
+ist man wieder im laufenden Spiel; im Browser reicht Neuladen.
+
+**Über mehrere Rechner:** Backend mit `python run_local.py --public` starten.
+Auf dem Host zeigt `python netcheck.py host` die IP-Adressen und die
+Client-Befehle; auf jedem Spieler-Rechner prüft
+`python netcheck.py client <ip-des-hosts>` die Verbindung und erklärt
+Fehler (Firewall, falsches Netz, Gateway läuft nicht).
 
 ## Nächste Schritte
 
-1. Gateway: WebSocket-Endpunkt mit `LocalGameBackend` umsetzen
-2. Frontend: Spieltisch im Browser
-3. Lobby-Service
-4. Raft-Knoten, danach `LocalGameBackend` durch `RaftGameBackend` ersetzen
+1. Browser-Client gestalten (Aufbau und `client/web/protocol.js` bleiben)
+2. Raft-Knoten und `ClusterClient` (ersetzen den Stub)
