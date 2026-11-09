@@ -272,7 +272,7 @@ Komponenten selbstständig erstellt und keine anderen als die angegebenen Quelle
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
 - Microsoft 365 Copilot (GPT-5.6 Sol) für das Erstellen und Formatieren der Anforderungs-Tabellen in @anforderungen.
-- Microsoft 365 Copilot (GPT-5.6 Sol) für Anpassung von Rechtschreibung und Formulierung meiner Kapitel.
+- Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen.
 
 #linebreak()
 #linebreak()
