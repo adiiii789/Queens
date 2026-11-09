@@ -271,7 +271,8 @@ Ich versichere, dass ich die mit meinem Namen gekennzeichneten Abschnitte und
 Komponenten selbstständig erstellt und keine anderen als die angegebenen Quellen und
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
-- [Werkzeug] für [Zweck] (bzw. ‚keine‘).
+- Microsoft 365 Copilot (GPT-5.6 Sol) für das Erstellen und Formatieren der Anforderungs-Tabellen in @anforderungen.
+- Microsoft 365 Copilot (GPT-5.6 Sol) für Anpassung von Rechtschreibung und Formulierung meiner Kapitel.
 
 #linebreak()
 #linebreak()

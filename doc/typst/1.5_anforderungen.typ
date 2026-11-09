@@ -1,6 +1,6 @@
 #import "include/templates.typ": abschnitt_von
 
-= Anforderungen
+= Anforderungen <anforderungen>
 
 Die folgenden Anforderungen beschreiben die benötigten Funktionen und Qualitätsmerkmale des Prototyps.
 Sie dienen zugleich als Grundlage für die spätere Überprüfung durch Tests und Ausfalldemonstrationen.
