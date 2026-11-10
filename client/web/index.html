@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Queens</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Funktionaler Client: Aufbau und IDs bleiben, die Gestaltung kommt später. -->
+  <header>
+    <h1>Queens</h1>
+    <span id="status">nicht verbunden</span>
+    <span id="me"></span>
+    <button id="logout" type="button">Abmelden</button>
+  </header>
+
+  <section id="connect">
+    <form id="connect-form">
+      <label>Name <input id="name" maxlength="24" required autofocus></label>
+      <button>Verbinden</button>
+    </form>
+  </section>
+
+  <section id="lobby" hidden>
+    <div id="lobby-start">
+      <button id="create" type="button">Lobby erstellen</button>
+      <form id="join-form">
+        <input id="code" placeholder="Code" maxlength="8" autocomplete="off">
+        <button>Beitreten</button>
+      </form>
+    </div>
+    <div id="lobby-info"></div>
+    <div id="lobby-ready" hidden>
+      <button id="ready" type="button">Bereit</button>
+      <button id="unready" type="button">Nicht bereit</button>
+      <button id="leave" type="button">Verlassen</button>
+    </div>
+  </section>
+
+  <section id="game" hidden>
+    <p id="turn"></p>
+    <div id="piles">
+      <button id="deck" type="button">Ziehstapel</button>
+      <button id="discard" type="button">Ablage</button>
+      <span id="drawn"></span>
+    </div>
+    <div id="controls">
+      <button id="discard-drawn" type="button">Ablegen</button>
+      <button id="skip" type="button">Überspringen</button>
+      <button id="knock" type="button">Klopfen</button>
+      <button id="throw-mode" type="button" aria-pressed="false">Zwischenwerfen</button>
+    </div>
+    <p id="hint"></p>
+    <div id="players"></div>
+    <div id="result"></div>
+  </section>
+
+  <p id="message" role="status"></p>
+
+  <section id="log-section">
+    <h2>Verlauf</h2>
+    <ol id="log" reversed></ol>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

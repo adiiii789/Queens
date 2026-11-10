@@ -249,6 +249,16 @@ def _throw_in(state: GameState, a: ThrowIn) -> list[Event]:
 
 
 def _turn_timeout(state: GameState, a: TurnTimeout) -> list[Event]:
+    if state.phase == Phase.INITIAL_PEEK:
+        # Wer bis jetzt nicht angesehen hat, verzichtet; dann beginnt Zug 1.
+        skipped = [p.player_id for p in state.players if not p.has_peeked]
+        for p in state.players:
+            p.has_peeked = True
+        events = [public("PeekTimedOut", player_ids=skipped)]
+        state.current_index = 0
+        _start_turn(state, events)
+        return events
+
     player_id = state.current_player.player_id
     events = [public("TurnTimedOut", player_id=player_id,
                      turn_number=state.turn_number)]

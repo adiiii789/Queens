@@ -63,7 +63,9 @@ def validate(state: GameState, action: Action) -> None:
 
     if isinstance(action, TurnTimeout):
         _require(action.player_id == SYSTEM_PLAYER, "Timeouts erzeugt nur das System.")
-        _require_phase(state, *TURN_PHASES)
+        # In der Startphase ist turn_number noch 0; dort verzichten Nachzügler
+        # aufs Ansehen.
+        _require_phase(state, Phase.INITIAL_PEEK, *TURN_PHASES)
         _require(action.turn_number == state.turn_number, "Veralteter Timeout.")
         return
 

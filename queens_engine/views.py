@@ -25,6 +25,8 @@ def player_view(state: GameState, player_id: str) -> dict[str, Any]:
         "game_id": state.game_id,
         "you": player_id,
         "phase": state.phase.value,
+        # steigt mit jeder angewendeten Aktion; Clients verwerfen ältere Sichten
+        "version": state.version,
         "turn_number": state.turn_number,
         "active_player": (state.current_player.player_id
                           if state.phase in (Phase.AWAIT_DRAW, Phase.AWAIT_DECISION,
