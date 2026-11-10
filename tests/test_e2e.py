@@ -13,9 +13,8 @@ Wird übersprungen, wenn keine PostgreSQL-Testdatenbank erreichbar ist
 from __future__ import annotations
 
 import asyncio
-import warnings
-from importlib.util import find_spec
 
+import asyncpg
 import httpx
 
 from run_local import Service
@@ -24,7 +23,6 @@ from test_gateway import by_turn, finish_turn, start_game
 GATEWAY_PORT, LOBBY_BASE, RAFT_BASE = 18000, 18000, 18100
 NODES = ("1", "2", "3")
 TIMEOUT = 20  # großzügig: Leader-Wahl plus Wiederholung im ClusterClient
-HAS_RESULT_WRITER = find_spec("services.raft.results") is not None  # P4 Teil 2
 
 
 def card_value(card: str) -> int:
@@ -43,7 +41,7 @@ class E2ESystem:
                 "-m", "services.raft.server", "--id", n, "--nodes", nodes_spec,
                 "--election-min", "0.5", "--election-max", "1.0", "--heartbeat", "0.1",
                 "--data-dir", str(log_dir / "raft-state"),
-                *(["--db", dsn] if HAS_RESULT_WRITER else []),
+                "--db", dsn,
             ], log_dir / f"raft-{n}.log")
         lobby_urls = []
         for name in ("l1", "l2"):
@@ -173,17 +171,7 @@ async def run(system: E2ESystem, dsn: str) -> None:
     state = await first.expect_state(lambda v: True, timeout=TIMEOUT)
     assert state["version"] == second.view["version"]
 
-    # 6. Klopfen, letzte Runde, Punkte prüfen (P1).
-    await first.act(type="Knock")
-    final = await finish_turn_slow(second)
-    assert final["phase"] == "finished" and final["knocker"] == first.player_id
-    result = final["result"]
-    for player_id, hand in result["hands"].items():
-        assert result["scores"][player_id] == sum(card_value(c) for c in hand if c)
-    best = min(result["scores"].values())
-    assert set(result["winners"]) == {p for p, s in result["scores"].items() if s == best}
-
-    # 7. Ausgefallenen Knoten neu starten: Er holt das Log auf (P4).
+    # 6. Ausgefallenen Knoten neu starten: Er holt das Log auf (P4).
     system.services[old["node_id"]].start()
     leader = await system.leader()
 
@@ -193,26 +181,45 @@ async def run(system: E2ESystem, dsn: str) -> None:
             and state["games"] == leader["games"] >= 1
     await system.until(caught_up)
 
-    # 8. Ergebnis steht genau einmal in PostgreSQL, Lobby ist `finished` (P2, P4).
-    if not HAS_RESULT_WRITER:
-        warnings.warn("Schritt 8 übersprungen: services/raft/results.py "
-                      "(feature/Raft_Log&Consistency Teil 2) fehlt noch")
-        return
-    import asyncpg
+    connection = await asyncpg.connect(dsn)
+    try:
+        # 7. Partie beenden und den Leader vor dem Speichern abschießen (P4).
+        # Die Tabellensperre hält den Writer bis zum Absturz zurück.
+        async with connection.transaction():
+            await connection.execute("LOCK TABLE games IN ACCESS EXCLUSIVE MODE")
+            finishing_leader = await system.leader()
+            await first.act(type="Knock")
+            final = await finish_turn_slow(second)
+            system.services[finishing_leader["node_id"]].kill()
+        assert (await system.leader())["term"] > finishing_leader["term"]
 
-    async def stored():
-        connection = await asyncpg.connect(dsn)
-        try:
-            games = await connection.fetchval(
-                "SELECT count(*) FROM games WHERE game_id = $1", final["game_id"])
-            rows = await connection.fetchval(
-                "SELECT count(*) FROM game_results WHERE game_id = $1", final["game_id"])
-            status = await connection.fetchval(
-                "SELECT status FROM lobbies WHERE game_id = $1", final["game_id"])
-        finally:
-            await connection.close()
-        return (games, rows, status) == (1, 2, "finished")
-    await system.until(stored)
+        assert final["phase"] == "finished" and final["knocker"] == first.player_id
+        result = final["result"]
+        for player_id, hand in result["hands"].items():
+            assert result["scores"][player_id] == sum(card_value(c) for c in hand if c)
+        best = min(result["scores"].values())
+        assert set(result["winners"]) == {p for p, s in result["scores"].items() if s == best}
+
+        # 8. Der neue Leader speichert das vollständige Ergebnis genau einmal (P2, P4).
+        async def stored():
+            return await connection.fetch(
+                "SELECT knocker FROM games WHERE game_id = $1", final["game_id"])
+
+        games = await system.until(stored)
+        assert [game["knocker"] for game in games] == [first.name]
+        rows = await connection.fetch(
+            "SELECT player_id, name, score, winner FROM game_results WHERE game_id = $1",
+            final["game_id"])
+        assert len(rows) == 2
+        assert {row["player_id"]: (row["name"], row["score"], row["winner"]) for row in rows} == {
+            player.player_id: (player.name, result["scores"][player.player_id],
+                               player.player_id in result["winners"])
+            for player in (first, second)
+        }
+        assert await connection.fetchval(
+            "SELECT status FROM lobbies WHERE game_id = $1", final["game_id"]) == "finished"
+    finally:
+        await connection.close()
 
 
 async def finish_turn_slow(client):

@@ -1,93 +1,81 @@
-"""Speichert beendete Partien in PostgreSQL (Raft_Log&Consistency Teil 2).
-
-Nur der aktuelle Leader schreibt. Er sieht regelmäßig nach, welche Partien
-im bestätigten (committeten) Zustand beendet sind, und speichert die noch
-fehlenden. Ist die Datenbank nicht erreichbar, versucht er es später erneut;
-laufende Partien hängen davon nicht ab.
-
-Genau einmal: Nach einem Leader-Wechsel kennt der neue Leader die schon
-gespeicherten Partien nicht und schreibt sie erneut. Die Datenbank verwirft
-Doppelte (game_id ist Primärschlüssel, ON CONFLICT DO NOTHING in
-`ResultRepository.save`). So geht auch nichts verloren, wenn der alte Leader
-mitten im Schreiben ausfällt.
-"""
-
-from __future__ import annotations
+"""Abgeschlossene, bestätigte Partien im Hintergrund speichern."""
 
 import asyncio
 import logging
-from typing import Any, Optional, Protocol
+from contextlib import asynccontextmanager, suppress
+from typing import Protocol
 
-from queens_engine import GameState, Phase
+from queens_engine import Phase
 
-log = logging.getLogger("raft.results")
+from .replication import Replication
+
+log = logging.getLogger(__name__)
 
 
 class ResultStore(Protocol):
-    async def save(self, game_id: str, results: list[dict[str, Any]],
-                   knocker: Optional[str] = None) -> bool: ...
-
-
-def result_rows(state: GameState) -> list[dict[str, Any]]:
-    """Je Spieler eine Zeile im Format von `ResultRepository.save`."""
-    return [{"player_id": p.player_id, "name": p.name,
-             "score": state.scores[p.player_id],
-             "winner": p.player_id in state.winners}
-            for p in state.players]
-
-
-def knocker_name(state: GameState) -> Optional[str]:
-    player = state.get_player(state.knocker_id) if state.knocker_id else None
-    return player.name if player else None
+    async def save(self, game_id: str, results: list[dict], knocker: str | None) -> bool: ...
 
 
 class ResultWriter:
-    """`replication` liefert `is_leader` und `state_machine.games`
-    (services/raft/replication.py); `store` ist ein ResultRepository."""
-
-    def __init__(self, replication: Any, store: ResultStore,
-                 interval: float = 1.0) -> None:
+    def __init__(self, replication: Replication, repository: ResultStore,
+                 retry_errors: tuple[type[Exception], ...] = (OSError,)) -> None:
         self.replication = replication
-        self.store = store
-        self.interval = interval
-        self.saved: set[str] = set()  # von diesem Knoten bereits geschrieben
-        self._task: Optional[asyncio.Task] = None
+        self.repository = repository
+        self.retry_errors = retry_errors
+        self.saved: set[str] = set()
 
-    def start(self) -> None:
-        if self._task is None:
-            self._task = asyncio.create_task(self._loop())
-
-    async def stop(self) -> None:
-        if self._task is not None:
-            self._task.cancel()
-            await asyncio.gather(self._task, return_exceptions=True)
-            self._task = None
-
-    async def _loop(self) -> None:
-        while True:
-            await asyncio.sleep(self.interval)
-            if self.replication.is_leader:
-                await self.flush()
-
-    def pending(self) -> list[GameState]:
-        games = self.replication.state_machine.games
-        return [state for game_id, state in list(games.items())
-                if state.phase == Phase.FINISHED and game_id not in self.saved]
-
-    async def flush(self) -> int:
-        """Speichert alle beendeten, noch nicht gespeicherten Partien.
-        Liefert die Anzahl neu gespeicherter Partien."""
-        new = 0
-        for state in self.pending():
+    async def write_finished(self) -> None:
+        if not self.replication.is_leader:
+            return
+        term = self.replication.node.current_term
+        for game in list(self.replication.state_machine.games.values()):
+            if not self.replication.is_leader or self.replication.node.current_term != term:
+                return
+            if game.phase != Phase.FINISHED or game.game_id in self.saved:
+                continue
+            rows = [
+                {"player_id": player.player_id, "name": player.name,
+                 "score": game.scores[player.player_id], "winner": player.player_id in game.winners}
+                for player in game.players
+            ]
+            knocker = game.get_player(game.knocker_id)
             try:
-                inserted = await self.store.save(state.game_id, result_rows(state),
-                                                 knocker=knocker_name(state))
-            except Exception as error:  # DB weg, Timeout …: beim nächsten Durchlauf erneut
-                log.warning("Ergebnis von %s nicht gespeichert (%s: %s), neuer Versuch folgt",
-                            state.game_id, type(error).__name__, error)
-                return new
-            self.saved.add(state.game_id)
-            if inserted:
-                new += 1
-                log.info("Ergebnis von %s gespeichert", state.game_id)
-        return new
+                await self.repository.save(game.game_id, rows, knocker.name if knocker else None)
+            except self.retry_errors as error:
+                log.warning("Ergebnis für %s konnte nicht gespeichert werden: %s", game.game_id, error)
+                return
+            self.saved.add(game.game_id)
+
+    async def run(self) -> None:
+        while True:
+            await self.write_finished()
+            await asyncio.sleep(1)
+
+
+@asynccontextmanager
+async def result_writer(replication: Replication, dsn: str | None):
+    """Im Lifespan des Game-Service öffnen. Ohne --db wird kein Pool benötigt."""
+    if dsn is None:
+        yield
+        return
+
+    from asyncpg import InterfaceError, PostgresConnectionError
+    from asyncpg.exceptions import OperatorInterventionError
+
+    from ..db import Database, DatabaseUnavailable, ResultRepository
+
+    database = Database(dsn)
+    # Bei der erstmaligen Schema-Anlage können Verbindungsfehler direkt ankommen.
+    retry_errors = (DatabaseUnavailable, OSError, asyncio.TimeoutError, InterfaceError,
+                    PostgresConnectionError, OperatorInterventionError)
+    writer = ResultWriter(replication, ResultRepository(database), retry_errors)
+    task = asyncio.create_task(writer.run())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            with suppress(asyncio.CancelledError):
+                await task
+        finally:
+            await database.close()
