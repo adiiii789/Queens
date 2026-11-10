@@ -59,10 +59,16 @@ async def result_writer(replication: Replication, dsn: str | None):
         yield
         return
 
+    from asyncpg import InterfaceError, PostgresConnectionError
+    from asyncpg.exceptions import OperatorInterventionError
+
     from ..db import Database, DatabaseUnavailable, ResultRepository
 
     database = Database(dsn)
-    writer = ResultWriter(replication, ResultRepository(database), (DatabaseUnavailable, OSError))
+    # Bei der erstmaligen Schema-Anlage können Verbindungsfehler direkt ankommen.
+    retry_errors = (DatabaseUnavailable, OSError, asyncio.TimeoutError, InterfaceError,
+                    PostgresConnectionError, OperatorInterventionError)
+    writer = ResultWriter(replication, ResultRepository(database), retry_errors)
     task = asyncio.create_task(writer.run())
     try:
         yield

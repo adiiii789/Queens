@@ -47,11 +47,11 @@ einer Wiederholung durch einen neuen Leader genau einmal speichern.
 - Die Wahl nutzt `replication.last_index` und `replication.term_at(index)`.
   Check-Quorum liest die monotonen Zeitstempel aus `peer_last_response`.
   Der Raft-Endpunkt delegiert an `replication.handle_append_entries(**payload)`.
-- Der gemeinsame Server registriert `app.include_router(client_router(replication))`
-  aus `services.raft.client_routes`. Für Teil 2 ergänzt der Server
-  `parser.add_argument("--db")` und öffnet im Lifespan
-  `async with result_writer(replication, args.db)` aus `services.raft.results`.
-  Beim Beenden wartet der Server auf `replication.close()`.
+- Der gemeinsame Server registriert `client_router(replication)`. Mit `--db`
+  startet er zusätzlich den `ResultWriter` und beendet ihn vor dem
+  Raft-Knoten. `run_local.py` gibt die konfigurierte PostgreSQL-Adresse an
+  Lobby und Raft weiter. Beim direkten Start von `services.raft.server` lässt
+  sich die Ergebnisspeicherung über `--db` zuschalten.
 - Lobby und Gateway nutzen `ClusterClient(urls)` mit `submit(command)`,
   `views(game_id)` und `close()`. Der Writer nutzt P2s
   `ResultRepository.save(game_id, results, knocker)`.
@@ -65,17 +65,23 @@ und doppelter Spielzüge, die Commit-Regel und die Wiederholung nach einer
 simulierten Datenbankunterbrechung. Der HTTP-Test verwendet die FastAPI-Routen
 über einen ASGI-Testtransport.
 
-Für den gemeinsamen Ende-zu-Ende-Test sind drei P4-Prüfungen vorgesehen.
+Der gemeinsame Ende-zu-Ende-Test mit einer PostgreSQL-Testdatenbank prüft drei
+P4-Szenarien.
 
 1. Einen Spielzug bestätigen, den Leader-Prozess beenden und den nächsten Zug
    auf dem neuen Leader bestätigen lassen.
 2. Den alten Prozess neu starten und warten, bis Log-Länge und Commit-Index
    mit dem Leader übereinstimmen.
-3. Nach Spielende den Leader beenden und in PostgreSQL prüfen, dass die Partie
-   einmal mit allen Spielerzeilen gespeichert wurde und die Lobby `finished` ist.
+3. Die Ergebnistabelle während des letzten Spielzugs sperren und den Leader
+   unmittelbar nach Spielende beenden. Nach Freigabe der Tabelle muss der neue
+   Leader genau eine Partie mit dem richtigen Namen des Klopfenden, den
+   Spielergebnissen und dem Lobby-Status `finished` speichern.
 
-Messwerte zur realen Wahlzeit und zur PostgreSQL-Wiederherstellung werden nach
-der Integration ergänzt. Das Log dieses Teilstands liegt im Arbeitsspeicher.
+In einem separaten Test wurde PostgreSQL nach dem Aufbau des Verbindungspools
+gestoppt. Die laufende Partie ließ sich beenden, und der Leader speicherte das
+Ergebnis nach dem Neustart der Datenbank.
+
+Das Raft-Log liegt im Arbeitsspeicher.
 Für Wiederanlauf nach Verlust mehrerer Log-Kopien müssen Term, Stimme und
 Log-Einträge gemäß [1] dauerhaft gespeichert werden.
 

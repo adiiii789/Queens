@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Mapping, Optional
 from urllib.parse import urlparse
 
@@ -48,7 +48,7 @@ RAFT_PAYLOAD_ERRORS = (TypeError, KeyError, ValueError)
 def create_app(node_id: str, nodes: Mapping[str, str], *, election_min: float = 1.5,
                election_max: float = 3.0, heartbeat: float = 0.3,
                rpc_timeout: float = 1.0, data_dir: Optional[str] = None,
-               http_transport: Any = None) -> FastAPI:
+               http_transport: Any = None, db: Optional[str] = None) -> FastAPI:
     """`http_transport` (httpx-Transport) nur für Tests ohne echte Sockets."""
     transport = HttpTransport(nodes, timeout=rpc_timeout, http_transport=http_transport)
     storage = JsonStorage(data_dir, node_id) if data_dir else None
@@ -63,12 +63,17 @@ def create_app(node_id: str, nodes: Mapping[str, str], *, election_min: float = 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        await node.start()
-        log.info("Knoten %s gestartet (%d Knoten, Mehrheit %d, Election-Timeout %.1f–%.1f s)",
-                 node_id, len(nodes), node.majority, election_min, election_max)
-        yield
-        await node.stop()
-        await transport.close()
+        async with AsyncExitStack() as stack:
+            stack.push_async_callback(transport.close)
+            stack.push_async_callback(node.stop)
+            await node.start()
+            if db is not None:
+                from .results import result_writer
+
+                await stack.enter_async_context(result_writer(replication, db))
+            log.info("Knoten %s gestartet (%d Knoten, Mehrheit %d, Election-Timeout %.1f–%.1f s)",
+                     node_id, len(nodes), node.majority, election_min, election_max)
+            yield
 
     app = FastAPI(title=f"Queens Game-Service {node_id}", lifespan=lifespan)
     app.state.node = node
@@ -126,6 +131,7 @@ def main() -> None:
     parser.add_argument("--heartbeat", type=float, default=0.3)
     parser.add_argument("--rpc-timeout", type=float, default=1.0)
     parser.add_argument("--data-dir", help="Term und Stimme hier speichern (optional)")
+    parser.add_argument("--db", help="PostgreSQL-DSN für Spielergebnisse (optional)")
     args = parser.parse_args()
 
     nodes = parse_nodes(args.nodes)
@@ -140,7 +146,7 @@ def main() -> None:
     setup_logging(f"raft-{args.id}")
     app = create_app(args.id, nodes, election_min=args.election_min,
                      election_max=args.election_max, heartbeat=args.heartbeat,
-                     rpc_timeout=args.rpc_timeout, data_dir=args.data_dir)
+                     rpc_timeout=args.rpc_timeout, data_dir=args.data_dir, db=args.db)
     uvicorn.run(app, host=args.host, port=port, log_level="warning")
 
 

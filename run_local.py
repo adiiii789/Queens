@@ -106,6 +106,7 @@ class Backend:
                 "--election-max", str(args.election_max),
                 "--heartbeat", str(args.heartbeat),
                 "--data-dir", str(LOG_DIR / "raft-state"),
+                "--db", self.dsn,
             ], LOG_DIR / f"raft-{n}.log")
 
         lobby_urls = []
