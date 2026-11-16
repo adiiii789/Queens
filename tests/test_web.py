@@ -20,9 +20,10 @@ def test_gateway_serves_web_client_next_to_ws_and_health():
     with TestClient(gateway()) as http:
         page = http.get("/")
         assert page.status_code == 200 and 'src="app.js"' in page.text
-        for asset in ("app.js", "protocol.js", "style.css"):
+        for asset in ("app.js", "admin.js", "protocol.js", "style.css"):
             assert http.get(f"/{asset}").status_code == 200
         assert http.get("/health").json()["status"] == "ok"
+        assert http.get("/api/config").json() == {"control": False}
         with http.websocket_connect("/ws") as ws:
             ws.send_json({"op": "hello", "name": "Anna"})
             assert ws.receive_json()["op"] == "welcome"

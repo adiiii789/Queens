@@ -608,6 +608,12 @@ def create_app(lobby_urls: list[str], factory: Optional[ClusterFactory] = None,
                 "games": sum(not g.finished for g in gateway.games.values()),
                 "lobbies": gateway.lobby.urls}
 
+    @app.get("/api/config")
+    async def config():
+        # Der Browser-Client fragt so, ob die Seite vom Leitstand (control.py)
+        # kommt; hier ist sie vom Gateway ausgeliefert.
+        return {"control": False}
+
     # Zuletzt einhängen, damit /ws und /health Vorrang haben.
     if WEB_DIR.is_dir():
         app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

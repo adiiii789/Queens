@@ -3,9 +3,12 @@
   python run_local.py                      3 Raft-Knoten, 2 Lobby-Instanzen, Gateway
   python run_local.py --nodes 5 --lobbies 3
   python run_local.py --public             Gateway für andere Rechner erreichbar
+  python run_local.py --no-autostart       nur den Leitstand starten, Dienste im Browser
 
 Jeder Dienst läuft als eigener Prozess (kein Docker), mit Log in
-logs/<name>.log. Danach steuert eine Admin-Konsole die Demo:
+logs/<name>.log. Der Leitstand (control.py) läuft auf http://127.0.0.1:8080/:
+Er liefert das Spiel im Browser aus und startet/stoppt die Dienste im Tab
+„Server“. Zusätzlich steuert eine Admin-Konsole die Demo:
 
   status               Rolle, Term, Leader, Log, Commit, Partien je Knoten; Lobbys; DB
   kill <name>          Prozess hart beenden (Absturz), z. B. kill 1, kill l2
@@ -17,8 +20,9 @@ logs/<name>.log. Danach steuert eine Admin-Konsole die Demo:
   hilfe                diese Übersicht
   quit                 alles sauber beenden
 
-Ports: Gateway 8000, Lobby-Instanz i = 8000 + i, Raft-Knoten n = 8100 + n
-(änderbar mit --gateway-port, --lobby-base, --raft-base).
+Ports: Leitstand 8080, Gateway 8000, Lobby-Instanz i = 8000 + i, Raft-Knoten
+n = 8100 + n (änderbar mit --control-port, --gateway-port, --lobby-base,
+--raft-base; --control-port 0 schaltet den Leitstand ab).
 """
 
 from __future__ import annotations
@@ -426,6 +430,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--peek-timeout", type=float, default=60.0)
     parser.add_argument("--no-console", action="store_true",
                         help="ohne Admin-Konsole laufen, bis Strg+C")
+    parser.add_argument("--control-port", type=int, default=8080,
+                        help="Leitstand im Browser (Standard 8080, 0 = aus)")
+    parser.add_argument("--no-autostart", action="store_true",
+                        help="Dienste nicht sofort starten (im Leitstand starten)")
+    parser.add_argument("--open", action="store_true",
+                        help="Leitstand im Standardbrowser öffnen")
     args = parser.parse_args(argv)
     if args.nodes < 1 or args.lobbies < 1:
         parser.error("--nodes und --lobbies müssen mindestens 1 sein")
@@ -434,17 +444,39 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+    if args.no_autostart and args.control_port == 0:
+        print("--no-autostart braucht den Leitstand (--control-port ungleich 0).",
+              file=sys.stderr)
+        return 2
     backend = Backend(args)
 
     error = check_database(backend.dsn)
     if error is not None:
         print(f"PostgreSQL nicht erreichbar ({backend.dsn}):\n  {error}\n"
               "Siehe Abschnitt „PostgreSQL einrichten“ in der README.", file=sys.stderr)
-        return 1
+        if not args.no_autostart:
+            return 1
 
-    print(f"Starte {args.nodes} Raft-Knoten, {args.lobbies} Lobby-Instanz(en) und das "
-          f"Gateway. Logs: {LOG_DIR}")
+    control = None
+    if args.control_port:
+        from control import ControlServer
+        try:
+            control = ControlServer(backend, args.control_port).start()
+        except OSError as error:
+            print(f"Leitstand konnte Port {args.control_port} nicht öffnen ({error}).",
+                  file=sys.stderr)
+            return 1
+        print(f"Leitstand und Spiel im Browser: {control.url}")
+        if args.open:
+            import webbrowser
+            webbrowser.open(control.url)
+
     try:
+        if args.no_autostart:
+            run_idle(args, backend)
+            return 0
+        print(f"Starte {args.nodes} Raft-Knoten, {args.lobbies} Lobby-Instanz(en) und das "
+              f"Gateway. Logs: {LOG_DIR}")
         backend.start_all()
         started = time.monotonic()
         leader = backend.wait_until(backend.current_leader, 30)
@@ -464,8 +496,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Client starten:  python -m client.cli --server {ws} --name Anna")
         if args.public:
             for ip in local_ips():
-                print(f"Von anderen Rechnern: python -m client.cli "
-                      f"--server ws://{ip}:{args.gateway_port}/ws --name <Name>")
+                print(f"Von anderen Rechnern: Browser http://{ip}:{args.gateway_port}/ "
+                      f"oder python -m client.cli --server ws://{ip}:{args.gateway_port}/ws "
+                      f"--name <Name>")
             print("Firewall: eingehende Verbindungen auf Port "
                   f"{args.gateway_port} erlauben. Keine öffentliche IP verwenden.")
 
@@ -478,9 +511,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         print()
     finally:
         print("Beende alle Dienste …")
+        if control is not None:
+            control.stop()
         backend.stop_all()
         print("Fertig.")
     return 0
+
+
+def run_idle(args: argparse.Namespace, backend: Backend) -> None:
+    """Nur Leitstand: Dienste werden im Browser gestartet."""
+    print("Dienste sind noch aus. Im Browser unter „Server“ → „Alle starten“.")
+    if args.no_console:
+        while True:
+            time.sleep(1)
+    Console(backend).run()
 
 
 if __name__ == "__main__":

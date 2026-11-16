@@ -4,65 +4,190 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Queens</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♛</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Funktionaler Client: Aufbau und IDs bleiben, die Gestaltung kommt später. -->
-  <header>
-    <h1>Queens</h1>
-    <span id="status">nicht verbunden</span>
-    <span id="me"></span>
-    <button id="logout" type="button">Abmelden</button>
+  <header class="topbar">
+    <div class="brand"><span class="crown">♛</span> Queens</div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" id="tab-play" type="button" role="tab" aria-selected="true">Spiel</button>
+      <button class="tab" id="tab-server" type="button" role="tab" aria-selected="false">Server</button>
+    </nav>
+    <div class="who">
+      <span id="status" class="pill">nicht verbunden</span>
+      <span id="me"></span>
+      <button id="logout" class="btn ghost small" type="button" hidden>Abmelden</button>
+    </div>
   </header>
 
-  <section id="connect">
-    <form id="connect-form">
-      <label>Name <input id="name" maxlength="24" required autofocus></label>
-      <button>Verbinden</button>
-    </form>
-  </section>
+  <main id="view-play">
+    <div id="banner" class="banner" hidden></div>
 
-  <section id="lobby" hidden>
-    <div id="lobby-start">
-      <button id="create" type="button">Lobby erstellen</button>
-      <form id="join-form">
-        <input id="code" placeholder="Code" maxlength="8" autocomplete="off">
-        <button>Beitreten</button>
+    <!-- Anmelden -->
+    <section id="connect" class="panel center-panel">
+      <div class="hero-cards" aria-hidden="true">
+        <div class="card face red tilt-l"><span class="corner">D<br>♥</span><span class="pip">D</span></div>
+        <div class="card back"></div>
+        <div class="card face tilt-r"><span class="corner">D<br>♠</span><span class="pip">D</span></div>
+      </div>
+      <h1>Willkommen bei Queens</h1>
+      <p class="muted">Merk dir deine Karten, tausche klug – die niedrigste Summe gewinnt.</p>
+      <form id="connect-form" class="row">
+        <input id="name" maxlength="24" placeholder="Dein Name" autocomplete="nickname" required autofocus>
+        <button class="btn primary">Mitspielen</button>
       </form>
-    </div>
-    <div id="lobby-info"></div>
-    <div id="lobby-ready" hidden>
-      <button id="ready" type="button">Bereit</button>
-      <button id="unready" type="button">Nicht bereit</button>
-      <button id="leave" type="button">Verlassen</button>
-    </div>
-  </section>
+      <details class="rules">
+        <summary>Spielregeln</summary>
+        <ul>
+          <li>Jeder hat 4 verdeckte Karten. Zu Beginn darfst du dir 2 davon einmal ansehen.</li>
+          <li>Im Zug: vom Ziehstapel oder der Ablage ziehen, dann gegen eine eigene Karte tauschen oder ablegen.</li>
+          <li>Legst du einen <b>Buben</b> ab, darfst du zwei beliebige Karten blind tauschen; beim <b>König</b> eine beliebige Karte ansehen.</li>
+          <li><b>Zwischenwerfen:</b> jederzeit eine eigene Karte vom selben Rang wie die oberste Ablagekarte abwerfen. Falsch? Strafkarte!</li>
+          <li><b>Klopfen</b> statt Ziehen: Alle anderen sind noch einmal dran, dann wird aufgedeckt.</li>
+          <li>Werte: Dame −1, Ass 1, Zahlen nach Augenwert, Bube und König 10.</li>
+        </ul>
+      </details>
+    </section>
 
-  <section id="game" hidden>
-    <p id="turn"></p>
-    <div id="piles">
-      <button id="deck" type="button">Ziehstapel</button>
-      <button id="discard" type="button">Ablage</button>
-      <span id="drawn"></span>
-    </div>
-    <div id="controls">
-      <button id="discard-drawn" type="button">Ablegen</button>
-      <button id="skip" type="button">Überspringen</button>
-      <button id="knock" type="button">Klopfen</button>
-      <button id="throw-mode" type="button" aria-pressed="false">Zwischenwerfen</button>
-    </div>
-    <p id="hint"></p>
-    <div id="players"></div>
+    <!-- Lobby -->
+    <section id="lobby" class="panel center-panel" hidden>
+      <div id="lobby-start" class="lobby-start">
+        <div class="choice">
+          <h2>Neue Runde</h2>
+          <p class="muted">Erstelle eine Lobby und teile den Code mit deinen Mitspielern.</p>
+          <button id="create" class="btn primary" type="button">Lobby erstellen</button>
+        </div>
+        <div class="divider"><span>oder</span></div>
+        <div class="choice">
+          <h2>Beitreten</h2>
+          <form id="join-form" class="row">
+            <input id="code" placeholder="CODE" maxlength="8" autocomplete="off" spellcheck="false">
+            <button class="btn">Beitreten</button>
+          </form>
+        </div>
+      </div>
+      <div id="lobby-room" hidden>
+        <p class="muted small-caps">Lobby-Code</p>
+        <div class="lobby-code-row">
+          <span id="lobby-code" class="lobby-code"></span>
+          <button id="copy-link" class="btn ghost small" type="button" title="Einladungslink kopieren">Link kopieren</button>
+        </div>
+        <p id="lobby-status" class="muted"></p>
+        <ul id="lobby-players" class="lobby-players"></ul>
+        <div id="lobby-ready" class="row">
+          <button id="ready" class="btn primary" type="button">Bereit</button>
+          <button id="leave" class="btn ghost" type="button">Verlassen</button>
+        </div>
+        <p class="muted small">Die Partie startet, sobald mindestens zwei Spieler da und alle bereit sind.</p>
+      </div>
+    </section>
+
+    <!-- Spieltisch -->
+    <section id="game" hidden>
+      <div class="game-layout">
+        <div class="table-wrap">
+          <div id="table" class="table">
+            <div id="opponents" class="opponents"></div>
+            <div class="center">
+              <div class="turn-info">
+                <div id="turn"></div>
+                <div class="timer" id="timer" hidden><div class="timer-bar" id="timer-bar"></div><span id="timer-text"></span></div>
+              </div>
+              <div class="piles">
+                <div class="pile">
+                  <button id="deck" class="card back stack" type="button" aria-label="Ziehstapel"></button>
+                  <span class="pile-label" id="deck-label">Ziehstapel</span>
+                </div>
+                <div class="pile">
+                  <button id="discard" class="card-slot" type="button" aria-label="Ablagestapel"></button>
+                  <span class="pile-label" id="discard-label">Ablage</span>
+                </div>
+                <div class="pile drawn" id="drawn-pile" hidden>
+                  <div id="drawn"></div>
+                  <span class="pile-label" id="drawn-label"></span>
+                </div>
+              </div>
+              <div id="special" class="special" hidden></div>
+              <div id="last-action" class="last-action" aria-live="polite"></div>
+            </div>
+            <div id="my-seat" class="my-seat"></div>
+          </div>
+          <div class="actionbar">
+            <p id="hint" class="hint"></p>
+            <p class="keys muted small" title="Tastaturkürzel">Tasten: <kbd>Z</kbd> ziehen · <kbd>A</kbd> Ablage · <kbd>W</kbd> ablegen · <kbd>S</kbd> überspringen · <kbd>K</kbd> klopfen · <kbd>X</kbd> zwischenwerfen · <kbd>0</kbd>–<kbd>9</kbd> eigene Karte · <kbd>Esc</kbd> abbrechen</p>
+            <div class="actions">
+              <button id="discard-drawn" class="btn" type="button" hidden title="Taste W">Ablegen</button>
+              <button id="skip" class="btn" type="button" hidden title="Taste S">Überspringen</button>
+              <button id="knock" class="btn warn" type="button" hidden title="Taste K">✊ Klopfen</button>
+              <button id="throw-mode" class="btn" type="button" aria-pressed="false">⚡ Zwischenwerfen</button>
+              <button id="show-result" class="btn ghost" type="button" hidden>Auflösung</button>
+              <button id="new-round" class="btn primary" type="button" hidden>Neue Runde</button>
+            </div>
+          </div>
+        </div>
+        <aside class="sidebar">
+          <h3>Verlauf</h3>
+          <ol id="log" class="log"></ol>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- Leitstand -->
+  <main id="view-server" hidden>
+    <section id="admin-offline" class="panel center-panel" hidden>
+      <h2>Serversteuerung nicht erreichbar</h2>
+      <p>Die Steuerung läuft nur auf dem Rechner, auf dem das Backend gestartet wurde:</p>
+      <pre>python run_local.py               # startet alles und den Leitstand
+python run_local.py --no-autostart  # nur Leitstand, Dienste hier starten</pre>
+      <p>Dann <a id="admin-link" href="http://127.0.0.1:8080/">http://127.0.0.1:8080/</a> öffnen.</p>
+      <p id="admin-offline-detail" class="muted small"></p>
+    </section>
+    <section id="admin" hidden>
+      <div class="admin-head">
+        <div class="admin-summary" id="admin-summary"></div>
+        <div class="row">
+          <button id="start-all" class="btn primary" type="button">▶ Alle starten</button>
+          <button id="stop-all" class="btn danger" type="button">■ Alle stoppen</button>
+        </div>
+      </div>
+      <h3>Game-Service (Raft-Cluster)</h3>
+      <div id="admin-raft" class="svc-grid"></div>
+      <h3>Lobby-Instanzen</h3>
+      <div id="admin-lobby" class="svc-grid"></div>
+      <h3>Gateway</h3>
+      <div id="admin-gateway" class="svc-grid"></div>
+      <div class="admin-bottom">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Log <span id="log-name" class="muted"></span></h3>
+            <select id="log-select" aria-label="Dienst für Log"></select>
+          </div>
+          <pre id="service-log" class="service-log">Dienst wählen …</pre>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Letzte Partien</h3>
+            <button id="results-refresh" class="btn ghost small" type="button">Aktualisieren</button>
+          </div>
+          <div id="results"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="result-dialog" class="result-dialog">
+    <h2 id="result-title">Auflösung</h2>
     <div id="result"></div>
-  </section>
+    <div class="row end">
+      <button id="result-close" class="btn ghost" type="button">Tisch ansehen</button>
+      <button id="result-new" class="btn primary" type="button">Neue Runde</button>
+    </div>
+  </dialog>
 
-  <p id="message" role="status"></p>
-
-  <section id="log-section">
-    <h2>Verlauf</h2>
-    <ol id="log" reversed></ol>
-  </section>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <p id="message" class="sr-only" role="status"></p>
 
   <script type="module" src="app.js"></script>
 </body>

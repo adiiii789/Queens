@@ -2,15 +2,18 @@
 
 Projekt im Modul Verteilte Systeme (DHBW Stuttgart).
 
-**Stand:** Die Spiellogik ist vollständig und getestet. Gateway, Lobby, Raft
-und Frontend sind als Platzhalter mit klaren Schnittstellen angelegt.
+**Stand:** Spiellogik, Raft-Cluster, Lobby-Service, Gateway und Browser-Client
+sind umgesetzt und getestet. Das ganze Spiel ist im Browser spielbar, die
+Dienste lassen sich dort auch starten und stoppen (Tab „Server“).
 
 ## Schnellstart
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
-python hotseat.py      # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
-pytest                 # Tests (DB-Tests brauchen PostgreSQL, s. u.)
+python run_local.py --open   # alles starten, Browser öffnet http://127.0.0.1:8080/
+python hotseat.py            # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
+pytest                       # Tests (DB-Tests brauchen PostgreSQL, s. u.)
 ```
 
 Python ≥ 3.10. Die Spiellogik selbst braucht keine externen Pakete.
@@ -29,19 +32,22 @@ queens_engine/            Spiellogik – FERTIG
   events.py               Ereignisse mit Empfängerkreis (alle / ein Spieler)
 
 services/
-  backend.py              GameBackend-Schnittstelle + LocalGameBackend – FERTIG
-  gateway/app.py          PLATZHALTER: FastAPI + WebSockets
-  lobby/app.py            PLATZHALTER: Lobby, Ready-Status
-  raft/node.py            PLATZHALTER: Raft-Knoten + RaftGameBackend
+  backend.py              GameBackend-Schnittstelle + LocalGameBackend
+  gateway/app.py          Realtime-Gateway: FastAPI + WebSockets
+  lobby/app.py            Lobby-Service (zustandslos, Daten in PostgreSQL)
+  db.py, schema.sql       Datenbankzugriff und Schema
+  raft/                   Raft-Knoten: Wahl, Log-Replikation, Zustandsmaschine
+  cluster_stub.py         Ersatz-Cluster im Prozess (für Tests)
 
 client/
   cli.py                  Terminal-Client für das Gateway (python -m client.cli)
   render.py               Texte für Ereignisse, Lobby, Tisch und Auflösung
-  web/                    Browser-Client (funktional), vom Gateway unter / ausgeliefert
+  web/                    Browser-Client: Spieltisch, Lobby, Leitstand (Tab „Server“)
+run_local.py              startet alle Dienste als Prozesse + Admin-Konsole + Leitstand
+control.py                Leitstand: liefert den Browser-Client aus, HTTP-API zum Steuern
 netcheck.py               Netzwerk-Check für Host und Client
-frontend/                 PLATZHALTER: Browser-Client
 hotseat.py                Terminal-Testmodus (Hotseat, ohne Netzwerk)
-tests/test_engine.py      Unit-Tests
+tests/                    Unit-, Integrations- und Ende-zu-Ende-Tests
 ```
 
 ## Architekturprinzip
@@ -120,19 +126,37 @@ Optionen des Gateways: `--host 0.0.0.0` (für andere Rechner), `--turn-timeout 6
 Die Endpunkte und Nachrichten stehen in den Docstrings von
 `services/lobby/app.py` und `services/gateway/app.py`.
 
-Solange `services/raft/client.py` fehlt, nutzen Lobby und Gateway den
-`StubClusterClient` aus `services/cluster_stub.py` (Partien nur im Prozess).
-
 ## Spielen
 
-Wenn das Backend läuft (z. B. `python run_local.py`), verbindet sich jeder
-Spieler mit dem Gateway:
+### Im Browser (empfohlen)
+
+```bash
+python run_local.py --open          # startet alles, öffnet den Leitstand
+python run_local.py --no-autostart  # nur Leitstand; Dienste im Tab „Server“ starten
+```
+
+`http://127.0.0.1:8080/` (Leitstand) oder `http://127.0.0.1:8000/` (Gateway)
+zeigen denselben Client. Jeder Browser-Tab ist ein eigener Spieler.
+
+- **Spiel:** Name eingeben, Lobby erstellen oder mit Code beitreten
+  („Link kopieren“ erzeugt einen Einladungslink), alle auf „Bereit“.
+  Am Tisch ist alles anklickbar und leuchtet, wenn es gerade dran ist:
+  Ziehstapel, Ablage (nehmen bzw. gezogene Karte ablegen), eigene Karten
+  (ansehen, tauschen, zwischenwerfen), beim Buben/König beliebige Karten.
+  Tasten: `Z` ziehen, `A` Ablage, `W` ablegen, `S` überspringen, `K` klopfen,
+  `X` zwischenwerfen, `0`–`9` eigene Karte, `Esc` abbrechen.
+- **Server:** Status aller Raft-Knoten (Rolle, Term, Log, Commit), Lobbys,
+  Gateway und Datenbank; Dienste einzeln oder alle starten/stoppen (Stoppen =
+  harter Absturz), Raft-Knoten isolieren/verbinden, Logs und letzte Partien.
+  Der Leitstand lauscht nur auf `127.0.0.1`, steuern geht also nur am
+  Host-Rechner. Port ändern mit `--control-port`, `0` schaltet ihn ab.
+- Mit `--public` spielen andere Rechner über `http://<IP-des-Hosts>:8000/` mit.
+
+### Im Terminal
 
 ```bash
 python -m client.cli --server ws://127.0.0.1:8000/ws --name Anna
 ```
-
-oder im Browser: `http://127.0.0.1:8000/` (vier Tabs = vier Spieler).
 
 Befehle im Terminal (`h` zeigt sie auch im Spiel):
 
