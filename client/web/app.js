@@ -618,12 +618,18 @@ function newRound() {
 }
 
 // --- Einladung ----------------------------------------------------------------------
+// Zeigt aufs Gateway unter der LAN-Adresse des Hosts, nicht auf 127.0.0.1.
 function inviteLink(code) {
-  const url = new URL(window.location.href);
+  const url = new URL(endpoints.invite.base + "/");
   url.searchParams.set("lobby", code);
-  url.hash = "";
   return url.toString();
 }
+
+const INVITE_WARNING = {
+  local: "Achtung: Das Gateway ist nur auf diesem Rechner erreichbar. "
+    + "Für Mitspieler das Backend mit „python run_local.py --public“ starten.",
+  "no-ip": "Keine Netzwerkadresse gefunden – der Link funktioniert nur auf diesem Rechner.",
+};
 
 function clearInviteParam() {
   const url = new URL(window.location.href);
@@ -638,10 +644,12 @@ async function copyInvite() {
   const link = inviteLink(ui.lobby.lobby_id);
   try {
     await navigator.clipboard.writeText(link);
-    toast("Einladungslink kopiert.", "good");
+    toast(`Einladungslink kopiert: ${link}`, "good");
   } catch {
+    // Zwischenablage gibt es nur über https/localhost, z. B. nicht über http://<LAN-IP>
     window.prompt("Einladungslink kopieren:", link);
   }
+  if (!endpoints.invite.reachable) toast(INVITE_WARNING[endpoints.invite.reason], "warn");
 }
 
 // --- Tabs ---------------------------------------------------------------------------

@@ -46,8 +46,9 @@ def test_serves_web_client_and_config(server):
         assert request(server, f"/{asset}")[0] == 200
     assert request(server, "/../run_local.py")[0] == 404
     status, _, body = request(server, "/api/config")
-    assert status == 200 and json.loads(body) == {
-        "control": True, "gateway_port": 8000, "public": False}
+    config = json.loads(body)
+    assert status == 200 and isinstance(config.pop("lan_ips"), list)
+    assert config == {"control": True, "gateway_port": 8000, "public": False}
 
 
 def test_status_lists_all_services_when_stopped(server):

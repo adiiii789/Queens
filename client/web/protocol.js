@@ -43,9 +43,10 @@ export async function resolveEndpoints(loc = window.location) {
   const params = new URLSearchParams(loc.search);
   let gateway = params.get("gateway");
   let control = params.get("control");
+  let config = null;
   try {
     const response = await fetch("/api/config", { cache: "no-store", signal: AbortSignal.timeout(1500) });
-    const config = response.ok ? await response.json() : null;
+    config = response.ok ? await response.json() : null;
     if (config?.control) {
       control ??= loc.origin;
       gateway ??= `${loc.hostname}:${config.gateway_port}`;
@@ -53,7 +54,27 @@ export async function resolveEndpoints(loc = window.location) {
   } catch { /* Seite kommt vom Gateway */ }
   gateway ??= loc.host;
   control ??= `${loc.protocol}//${loc.hostname}:8080`;
-  return { ws: gatewayUrl(loc, gateway), control: control.replace(/\/$/, "") };
+  return {
+    ws: gatewayUrl(loc, gateway),
+    control: control.replace(/\/$/, ""),
+    invite: inviteBase(loc, gateway, config),
+  };
+}
+
+const isLoopback = (host) => host === "localhost" || host.startsWith("127.") || host === "[::1]" || host === "::1";
+
+// Basis für Einladungslinks: immer das Gateway (den Leitstand erreichen andere
+// Rechner nicht), und statt 127.0.0.1/localhost die LAN-Adresse des Hosts.
+// { base: "http://192.168.1.20:8000", reachable: bool, reason?: "local" | "no-ip" }
+export function inviteBase(loc, gateway, config) {
+  const target = new URL(`${loc.protocol}//${gateway}`);
+  const lanIp = config?.lan_ips?.[0];
+  if (isLoopback(target.hostname)) {
+    if (!lanIp) return { base: target.origin, reachable: false, reason: "no-ip" };
+    target.hostname = lanIp;
+  }
+  if (config?.public === false) return { base: target.origin, reachable: false, reason: "local" };
+  return { base: target.origin, reachable: true };
 }
 
 export class QueensClient {

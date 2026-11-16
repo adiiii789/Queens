@@ -23,7 +23,9 @@ def test_gateway_serves_web_client_next_to_ws_and_health():
         for asset in ("app.js", "admin.js", "protocol.js", "style.css"):
             assert http.get(f"/{asset}").status_code == 200
         assert http.get("/health").json()["status"] == "ok"
-        assert http.get("/api/config").json() == {"control": False}
+        config = http.get("/api/config").json()
+        assert config["control"] is False and isinstance(config["lan_ips"], list)
+        assert not any(ip.startswith("127.") for ip in config["lan_ips"])
         with http.websocket_connect("/ws") as ws:
             ws.send_json({"op": "hello", "name": "Anna"})
             assert ws.receive_json()["op"] == "welcome"

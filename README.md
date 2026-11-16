@@ -151,6 +151,8 @@ zeigen denselben Client. Jeder Browser-Tab ist ein eigener Spieler.
   Der Leitstand lauscht nur auf `127.0.0.1`, steuern geht also nur am
   Host-Rechner. Port ändern mit `--control-port`, `0` schaltet ihn ab.
 - Mit `--public` spielen andere Rechner über `http://<IP-des-Hosts>:8000/` mit.
+  „Link kopieren“ setzt dafür automatisch die LAN-IP des Hosts und Port 8000
+  ein (nicht 127.0.0.1 bzw. den Leitstand-Port 8080).
 
 ### Im Terminal
 
@@ -172,7 +174,10 @@ Bricht die Verbindung ab, verbindet sich der Client selbst neu. Nach einem
 Neustart mit `--player-id <id>` (wird beim Anmelden und Beenden angezeigt)
 ist man wieder im laufenden Spiel; im Browser reicht Neuladen.
 
-**Über mehrere Rechner:** Backend mit `python run_local.py --public` starten.
+**Über mehrere Rechner:** Nur der Host braucht PostgreSQL und startet das
+Backend mit `python run_local.py --public`. Mitspieler starten **nichts**
+(kein `run_local.py`, keine Datenbank) und öffnen nur `http://<IP-des-Hosts>:8000/`
+im Browser bzw. den Einladungslink. Der Tab „Server“ funktioniert nur am Host.
 Auf dem Host zeigt `python netcheck.py host` die IP-Adressen und die
 Client-Befehle; auf jedem Spieler-Rechner prüft
 `python netcheck.py client <ip-des-hosts>` die Verbindung und erklärt

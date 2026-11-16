@@ -6,7 +6,7 @@ gestoppt ist – und bietet eine kleine JSON-API, mit der die Seite (Tab
 „Server“) die Dienste starten, stoppen, isolieren und beobachten kann.
 
 API (JSON):
-  GET  /api/config                       {"gateway_port", "public", "control": true}
+  GET  /api/config                       {"gateway_port", "public", "lan_ips", "control": true}
   GET  /api/status                       Dienste, Raft-Status, Leader, Datenbank
   GET  /api/logs/<name>?lines=80         Ende der Log-Datei eines Dienstes
   GET  /api/results?limit=10             letzte Partien aus PostgreSQL
@@ -61,9 +61,10 @@ class Control:
 
     # --- Abfragen ---------------------------------------------------------------------
     def config(self) -> dict[str, Any]:
+        from run_local import local_ips
         args = self.backend.args
         return {"control": True, "gateway_port": args.gateway_port,
-                "public": bool(args.public)}
+                "public": bool(args.public), "lan_ips": local_ips()}
 
     def database(self, fresh: bool = False) -> dict[str, Any]:
         from run_local import check_database
