@@ -32,8 +32,49 @@ export function newActionId() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function gatewayUrl(loc = window.location) {
-  return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/ws`;
+export function gatewayUrl(loc = window.location, host = loc.host) {
+  return `${loc.protocol === "https:" ? "wss" : "ws"}://${host}/ws`;
+}
+
+// Woher kommt die Seite? Vom Gateway (Port 8000) oder vom Leitstand
+// (control.py, Port 8080). Der Leitstand beantwortet /api/config und nennt den
+// Gateway-Port. Überschreiben: ?gateway=host:port bzw. ?control=http://host:port
+export async function resolveEndpoints(loc = window.location) {
+  const params = new URLSearchParams(loc.search);
+  let gateway = params.get("gateway");
+  let control = params.get("control");
+  let config = null;
+  try {
+    const response = await fetch("/api/config", { cache: "no-store", signal: AbortSignal.timeout(1500) });
+    config = response.ok ? await response.json() : null;
+    if (config?.control) {
+      control ??= loc.origin;
+      gateway ??= `${loc.hostname}:${config.gateway_port}`;
+    }
+  } catch { /* Seite kommt vom Gateway */ }
+  gateway ??= loc.host;
+  control ??= `${loc.protocol}//${loc.hostname}:8080`;
+  return {
+    ws: gatewayUrl(loc, gateway),
+    control: control.replace(/\/$/, ""),
+    invite: inviteBase(loc, gateway, config),
+  };
+}
+
+const isLoopback = (host) => host === "localhost" || host.startsWith("127.") || host === "[::1]" || host === "::1";
+
+// Basis für Einladungslinks: immer das Gateway (den Leitstand erreichen andere
+// Rechner nicht), und statt 127.0.0.1/localhost die LAN-Adresse des Hosts.
+// { base: "http://192.168.1.20:8000", reachable: bool, reason?: "local" | "no-ip" }
+export function inviteBase(loc, gateway, config) {
+  const target = new URL(`${loc.protocol}//${gateway}`);
+  const lanIp = config?.lan_ips?.[0];
+  if (isLoopback(target.hostname)) {
+    if (!lanIp) return { base: target.origin, reachable: false, reason: "no-ip" };
+    target.hostname = lanIp;
+  }
+  if (config?.public === false) return { base: target.origin, reachable: false, reason: "local" };
+  return { base: target.origin, reachable: true };
 }
 
 export class QueensClient {
@@ -49,6 +90,11 @@ export class QueensClient {
     this.delay = RECONNECT_START;
     this.lastVersion = -1;
     this.stopped = false;
+    this.retryTimer = null;
+  }
+
+  get connected() {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   get hasSession() {
@@ -59,6 +105,8 @@ export class QueensClient {
     this.name = name;
     session.set(STORAGE_NAME, name);
     this.stopped = false;
+    clearTimeout(this.retryTimer);
+    if (this.ws) { const old = this.ws; this.ws = null; old.close(); }
     this.onStatus("verbinde");
     const ws = new WebSocket(this.url);
     this.ws = ws;
@@ -71,18 +119,27 @@ export class QueensClient {
       this.handle(message);
     };
     ws.onclose = (event) => {
-      if (this.ws === ws) this.ws = null;
+      if (this.ws !== ws) return; // bereits ersetzt
+      this.ws = null;
       if (this.stopped) return;
       if (event.code === CLOSE_REPLACED) { this.onStatus("ersetzt"); return; }
       if (event.code === CLOSE_REJECTED) { this.onStatus("abgelehnt"); return; }
       this.onStatus("getrennt", this.delay);
-      setTimeout(() => { if (!this.stopped) this.connect(); }, this.delay);
+      this.retryTimer = setTimeout(() => { if (!this.stopped) this.connect(); }, this.delay);
       this.delay = Math.min(this.delay * 2, RECONNECT_MAX);
     };
   }
 
+  // Nach einem Serverstart nicht auf den Backoff warten.
+  reconnectNow() {
+    if (this.stopped || this.connected || !this.hasSession && !this.name) return;
+    this.delay = RECONNECT_START;
+    this.connect();
+  }
+
   disconnect() {
     this.stopped = true;
+    clearTimeout(this.retryTimer);
     if (this.ws) this.ws.close();
   }
 

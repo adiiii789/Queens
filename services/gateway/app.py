@@ -52,7 +52,7 @@ from fastapi.staticfiles import StaticFiles
 from queens_engine import SYSTEM_PLAYER
 
 from ..cluster_stub import ClusterFactory, ClusterUnavailable, cluster_client_factory
-from ..netconfig import setup_logging
+from ..netconfig import local_ips, setup_logging
 
 log = logging.getLogger("gateway")
 
@@ -582,7 +582,7 @@ class Gateway:
 def create_app(lobby_urls: list[str], factory: Optional[ClusterFactory] = None,
                unavailable: tuple[type[Exception], ...] = (),
                turn_timeout: float = 60.0, afk_timeout: float = 15.0,
-               peek_timeout: float = 60.0) -> FastAPI:
+               peek_timeout: float = 60.0, public: Optional[bool] = None) -> FastAPI:
     if factory is None:
         factory, unavailable = cluster_client_factory()
     gateway = Gateway(LobbyPool(lobby_urls), factory, unavailable,
@@ -608,6 +608,13 @@ def create_app(lobby_urls: list[str], factory: Optional[ClusterFactory] = None,
                 "games": sum(not g.finished for g in gateway.games.values()),
                 "lobbies": gateway.lobby.urls}
 
+    @app.get("/api/config")
+    async def config():
+        # Der Browser-Client fragt so, ob die Seite vom Leitstand (control.py)
+        # kommt; hier ist sie vom Gateway ausgeliefert. lan_ips/public braucht
+        # „Link kopieren“, damit Einladungen nicht auf 127.0.0.1 zeigen.
+        return {"control": False, "public": public, "lan_ips": local_ips()}
+
     # Zuletzt einhängen, damit /ws und /health Vorrang haben.
     if WEB_DIR.is_dir():
         app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
@@ -632,7 +639,8 @@ def main() -> None:
     setup_logging("gateway")
     app = create_app([u.strip() for u in args.lobby.split(",") if u.strip()],
                      turn_timeout=args.turn_timeout, afk_timeout=args.afk_timeout,
-                     peek_timeout=args.peek_timeout)
+                     peek_timeout=args.peek_timeout,
+                     public=args.host not in ("127.0.0.1", "localhost", "::1"))
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

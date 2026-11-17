@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 
 
 def parse_nodes(spec: str) -> dict[str, str]:
@@ -33,6 +34,23 @@ def parse_clusters(spec: str) -> dict[str, list[str]]:
         name, _, urls = part.partition("=")
         clusters[name.strip()] = [u.strip().rstrip("/") for u in urls.split("|") if u.strip()]
     return clusters
+
+
+def local_ips() -> list[str]:
+    """IPv4-Adressen dieses Rechners, über die andere ihn erreichen können
+    (ohne 127.x). Die Adresse der Standardroute steht vorn."""
+    addresses: list[str] = []
+    try:  # Adresse der Standardroute; dabei wird nichts gesendet
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))
+            addresses.append(probe.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        addresses += socket.gethostbyname_ex(socket.gethostname())[2]
+    except OSError:
+        pass
+    return [a for a in dict.fromkeys(addresses) if not a.startswith("127.")]
 
 
 def setup_logging(name: str) -> None:
