@@ -4,7 +4,9 @@ Dient zum Testen der Spiellogik ohne Netzwerk. Private Ereignisse
 (angesehene/gezogene Karten) werden mit Kennzeichnung angezeigt und danach
 optional verdeckt.
 
-Start:  python cli.py
+Start:  python hotseat.py
+
+Der Netzwerk-Client für das Gateway ist `python -m client.cli`.
 """
 
 from __future__ import annotations
