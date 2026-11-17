@@ -6,4 +6,6 @@
 - Was würde man nach dem Projekt anders machen?
 - Was waren die größten Herausforderungen und wie wurden diese gelöst?
 
+#include "4_reflexion_lobby_gateway.typ"
+
 #include "4_reflexion_raft_leader.typ"
