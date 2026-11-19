@@ -5,6 +5,9 @@
 
 == Implementierung
 === Frontend
+
+#include "3_umsetzung_frontend.typ"
+
 === Backend
 Jeweils:
 - Wie wird die Architektur umgesetzt?

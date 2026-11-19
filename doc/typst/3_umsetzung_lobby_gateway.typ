@@ -2,9 +2,10 @@
 
 ==== Lobby, Gateway und Datenbank
 
+Bevor eine Partie im Game-Service läuft, müssen sich die Spieler finden, und während der Partie muss jemand die Verbindungen zu den Clients halten. Diese Aufgaben teilen sich drei Komponenten: eine zentrale PostgreSQL-Datenbank für Lobbys und Ergebnisse, ein Lobby-Service aus beliebig vielen gleichberechtigten Instanzen und ein Gateway als einziger Einstiegspunkt der Clients. Ziel war, dass der Ausfall einer Lobby-Instanz für die Spieler unsichtbar bleibt und eine Partie auch dann genau einmal startet, wenn sich die letzten Spieler gleichzeitig über verschiedene Instanzen bereit melden.
+
 #abschnitt_von("Adrian")
 
-Bevor eine Partie im Game-Service läuft, müssen sich die Spieler finden, und während der Partie muss jemand die Verbindungen zu den Clients halten. Diese Aufgaben teilen sich drei Komponenten: eine zentrale PostgreSQL-Datenbank für Lobbys und Ergebnisse, ein Lobby-Service aus beliebig vielen gleichberechtigten Instanzen und ein Gateway als einziger Einstiegspunkt der Clients. Ziel war, dass der Ausfall einer Lobby-Instanz für die Spieler unsichtbar bleibt und eine Partie auch dann genau einmal startet, wenn sich die letzten Spieler gleichzeitig über verschiedene Instanzen bereit melden.
 
 ===== Aufbau
 
@@ -14,6 +15,9 @@ Bevor eine Partie im Game-Service läuft, müssen sich die Spieler finden, und w
 - `services/cluster_stub.py` bildet den `ClusterClient` der Log-Replikation nach, wendet die Befehle aber direkt auf die Spiellogik an. Damit ließen sich Lobby und Gateway entwickeln und testen, bevor der Raft-Branch gemergt war. Sobald `services/raft/client.py` vorhanden ist, wird automatisch der echte Client verwendet.
 
 Eine Lobby-Instanz hält keine Lobby-Daten im Speicher; jede Anfrage liest und schreibt direkt in PostgreSQL. Deshalb kann jede Instanz jede Anfrage beantworten, und der Ausfall einer Instanz kostet keine Daten. Im Prozess leben nur die Cluster-Clients, einer je Game-Service-Cluster. Jede Antwort enthält mit `served_by` den Namen der Instanz, sodass in der Demo sichtbar ist, welche Instanz geantwortet hat.
+
+#abschnitt_von("Adrian")
+
 
 ===== Datenbank und gleichzeitige Zugriffe
 
@@ -30,6 +34,9 @@ Weitere Stellen nutzen Eigenschaften der Datenbank, statt eigene Sperren einzuf�
 
 Die Verbindungen verwaltet ein asyncpg-Pool @asyncpg mit ein bis fünf Verbindungen. Er wird erst bei der ersten Anfrage angelegt; schlägt das fehl, versucht es die nächste Anfrage erneut. Eine Lobby-Instanz startet also auch, wenn die Datenbank noch nicht läuft, und verbindet sich nach einem Datenbankausfall selbstständig neu. Solange die Datenbank fehlt, beantwortet sie Anfragen mit HTTP 503 und `GET /health` meldet `db: false`.
 
+#abschnitt_von("Adrian")
+
+
 ===== Spielstart genau einmal
 
 Die Instanz mit dem Start-Ticket legt die Partie im zugeordneten Cluster an (`CreateGame` mit der Spielerliste), startet sie (`StartGame` mit zufälligem Seed) und setzt die Lobby auf `started`. Die Antwort enthält die Adressen der Cluster-Knoten, über die das Gateway die Partie anschließend direkt anspricht.
@@ -37,6 +44,9 @@ Die Instanz mit dem Start-Ticket legt die Partie im zugeordneten Cluster an (`Cr
 Datenbank und Cluster lassen sich nicht in einer gemeinsamen Transaktion ändern. Stürzt eine Instanz zwischen dem Ticket und dem Start ab, bliebe die Lobby für immer in `starting`. Gelöst ist das über Idempotenz: `CreateGame` ist je `game_id` idempotent, und `StartGame` trägt die feste `action_id` `<game_id>-start`, die die Zustandsmaschine nur einmal ausführt. Beide Schritte dürfen also gefahrlos wiederholt werden. Fragt jemand eine Lobby ab, die länger als 15 s in `starting` hängt, übernimmt die antwortende Instanz den Start mit `claim_stale_start`. Diese Methode setzt unter derselben Zeilensperre den Zeitstempel neu, sodass auch hier nur eine Instanz übernimmt. Damit die Abfrage tatsächlich kommt, fragt das Gateway bei Lobbys in `starting` alle 2 s nach.
 
 Ist der Cluster beim Start nicht erreichbar, setzt `abort_start` die Lobby auf `waiting` zurück und nimmt allen Spielern den Bereit-Status. Die Spieler erhalten die Meldung „Spielserver nicht erreichbar. Bitte erneut bereit melden.“ und können es später noch einmal versuchen, statt in einer scheinbar startenden Lobby zu warten.
+
+#abschnitt_von("Adrian")
+
 
 ===== Gateway
 
@@ -51,6 +61,9 @@ Das Gateway hält die WebSocket-Verbindungen aller Clients. Es läuft als einzel
 *Verteilung.* Die Antwort des Clusters enthält die neuen Ereignisse und für jeden Spieler seine eigene Sicht. Jeder Spieler erhält nur die Ereignisse, deren `audience` leer ist oder seine ID trägt, und nur seine eigene Sicht; fremde Kartenwerte verlassen das Gateway also nie. Weil Antworten gleichzeitiger Aktionen in anderer Reihenfolge ankommen können, als der Cluster sie bestätigt hat, verwirft das Gateway Sichten mit kleinerer `version` als der zuletzt gesendeten.
 
 *Zug-Timeouts.* Die Spiellogik ist eine deterministische Zustandsmaschine und darf deshalb keine Uhr lesen; sonst kämen die Knoten beim Abspielen des Logs zu unterschiedlichen Ergebnissen. Die Zeit misst daher das Gateway: 60 s für das Ansehen der Startkarten, 60 s pro Zug und 15 s, wenn der Spieler am Zug getrennt ist. Läuft ein Timer ab, reicht das Gateway eine gewöhnliche `TurnTimeout`-Aktion mit der Zugnummer und einer festen `action_id` ein. Sie läuft wie jede andere Aktion durch das Log; ist der Zug inzwischen vorbei, lehnt die Zustandsmaschine sie ab. Der Timer wird nur bei einem neuen Zug gestellt, damit Zwischenschritte im selben Zug die Zeit nicht verlängern. Ist der Cluster gerade ohne Leader, wiederholt das Gateway die Aktion alle 2 s.
+
+#abschnitt_von("Adrian")
+
 
 ===== Verhalten bei Ausfällen
 
@@ -71,6 +84,9 @@ Das Gateway hält die WebSocket-Verbindungen aller Clients. Es läuft als einzel
   ),
   caption: [Verhalten von Lobby-Service und Gateway bei Ausfällen]
 ) <tab-ausfall-lobby>
+
+#abschnitt_von("Adrian")
+
 
 ===== Ergebnisse
 
@@ -93,6 +109,11 @@ Den Ausfall der Datenbank haben wir mit allen Diensten als echten Prozessen geme
 
 Nicht gemessen ist eine Netzwerktrennung, bei der die Verbindungen zur Datenbank nicht abgebaut werden. Dann greifen erst die Timeouts des Pools (3 s für den Verbindungsaufbau, 5 s je Befehl), und Lobby-Anfragen würden entsprechend später mit HTTP 503 beantwortet.
 
+#abschnitt_von("Adrian")
+
+
 ===== Tests
 
 Die Datenbanktests (`tests/test_db.py`) laufen gegen eine echte Testdatenbank `queens_test` und verwenden zwei getrennte Pools, die für zwei Lobby-Instanzen stehen. Geprüft werden Anlegen, Beitreten, Verlassen und Host-Wechsel, dass gleichzeitiges Bereitmelden über beide Pools in 20 Wiederholungen jeweils genau ein Start-Ticket ergibt, dass 14 gleichzeitige Beitritte zu genau acht Spielern führen, die Verteilung auf Cluster, die Übernahme eines hängenden Starts und das einmalige Speichern eines Ergebnisses. `tests/test_lobby.py` startet zwei Lobby-Instanzen gegen dieselbe Datenbank und prüft, dass beide dieselbe Lobby liefern, dass gleichzeitiges Bereitmelden die Partie genau einmal startet und dass ein nicht erreichbarer Cluster die Lobby wieder öffnet. `tests/test_gateway.py` spielt über echte WebSocket-Verbindungen eine komplette Partie und prüft dabei, dass kein Client fremde Ereignisse oder Karten erhält und eine gefälschte `player_id` abgelehnt wird. Weitere Tests decken den Ausfall einer Lobby-Instanz, den Reconnect, das Überspringen eines getrennten Spielers und den Zug-Timeout ab. Ist keine Datenbank erreichbar, überspringen sich diese Tests, damit die übrigen überall laufen. Mit PostgreSQL 18 liefen alle 17 Tests fünfmal hintereinander fehlerfrei, der Ende-zu-Ende-Test einschließlich der Prüfung des gespeicherten Ergebnisses zehnmal.
+
+#abschnitt_von("Adrian")
