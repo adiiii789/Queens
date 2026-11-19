@@ -1,13 +1,13 @@
 #import "include/templates.typ": abschnitt_von
 
-==== Game-Service: Leader-Wahl und Ausfallerkennung
+=== Game-Service: Leader-Wahl und Ausfallerkennung
 
 Der Game-Service hält den Zustand aller laufenden Partien. Damit eine Partie den Ausfall eines Servers übersteht, läuft er als Cluster aus $n$ gleichberechtigten Knoten, die sich mit dem Konsensalgorithmus Raft @ongaro2014raft auf eine gemeinsame Reihenfolge der Spielaktionen einigen. Raft trennt das Problem in Leader-Wahl, Log-Replikation und Sicherheit. Dieser Abschnitt beschreibt die Leader-Wahl und die Ausfallerkennung; die Replikation des Logs ist in einem eigenen Abschnitt beschrieben. Die Clustergröße ist frei wählbar: Weil jede Entscheidung eine Mehrheit von $floor(n slash 2) + 1$ Knoten braucht, verkraftet ein Cluster $floor((n - 1) slash 2)$ Ausfälle, also drei Knoten einen und fünf Knoten zwei.
 
 #abschnitt_von("Gergö")
 
 
-===== Aufbau
+==== Aufbau
 
 Die Implementierung liegt in `services/raft/` und ist so geschnitten, dass Leader-Wahl und Replikation unabhängig voneinander entwickelt und getestet werden konnten:
 
@@ -21,7 +21,7 @@ Die Schnittstelle zur Replikation besteht aus wenigen Methoden. Der Knoten fragt
 #abschnitt_von("Gergö")
 
 
-===== Ablauf der Wahl
+==== Ablauf der Wahl
 
 Jeder Knoten startet als Follower. Erhält er innerhalb seines Election-Timeouts keine Nachricht von einem Leader, wird er Candidate: Er erhöht den Term, stimmt für sich selbst und schickt `RequestVote` parallel an alle anderen Knoten. Antwortet eine Mehrheit mit Zustimmung, wird er Leader; meldet eine Antwort einen höheren Term, wird er wieder Follower. Die Zustände und Übergänge zeigt @raft-zustaende.
 
@@ -38,21 +38,21 @@ Ein Knoten stimmt pro Term höchstens einmal ab, und nur für einen Kandidaten, 
 #abschnitt_von("Gergö")
 
 
-===== Check-Quorum
+==== Check-Quorum
 
 Das Raft-Paper beschreibt, wie ein Follower einen ausgefallenen Leader erkennt, aber nicht, wie ein Leader bemerkt, dass er selbst abgeschnitten ist. Ohne weitere Maßnahme hält sich ein vom Netz getrennter Leader unbegrenzt für zuständig, während die Mehrheit längst einen neuen gewählt hat. Bestätigen kann er zwar nichts mehr, weil ihm die Mehrheit fehlt, aber er nimmt weiterhin Anfragen an, die erst nach Ablauf der Wartezeit scheitern. Deshalb prüft der Leader in jedem Tick, ob ihm innerhalb des maximalen Election-Timeouts eine Mehrheit geantwortet hat. Die Antwortzeitpunkte erfasst die Replikation bei jedem AppendEntries. Fehlt die Mehrheit, tritt er zurück und Anfragen an ihn werden sofort mit dem Hinweis „nicht Leader“ beantwortet. Weil der neue Leader frühestens nach dem minimalen und der alte spätestens nach dem maximalen Election-Timeout wechselt, gibt es kurzzeitig zwei Knoten, die sich für Leader halten. Das ist unkritisch, denn der alte kann ohne Mehrheit nichts bestätigen.
 
 #abschnitt_von("Gergö")
 
 
-===== Isolation für die Demo
+==== Isolation für die Demo
 
 Für die Vorstellung lässt sich ein Knoten mit `POST /admin/isolate` vom Netz trennen. Ein isolierter Knoten sendet keine RPCs mehr, und seine Raft-Endpunkte antworten mit HTTP 503. Damit lässt sich eine Netzwerkpartition zeigen, ohne Firewall-Regeln zu ändern. Die Startskript-Konsole (`run_local.py`) bietet dafür die Befehle `isolate` und `heal`, außerdem `kill` und `start` für Abstürze und `status` für den Zustand aller Knoten.
 
 #abschnitt_von("Gergö")
 
 
-===== Ergebnisse
+==== Ergebnisse
 
 @tab-failover zeigt die mit drei und fünf echten Prozessen auf einem Rechner gemessenen Zeiten bei Standardeinstellungen (Election-Timeout 1,5 bis 3 s, Heartbeat 0,3 s). Der neue Leader steht im Mittel nach knapp 2 s fest, was dem Erwartungswert des Timeouts entspricht; ein isolierter Leader tritt wie vorgesehen nach 3 s zurück. Bei $floor((n-1) slash 2)$ Ausfällen wurde jeweils ein Leader gewählt, bei einem weiteren Ausfall nicht mehr.
 
@@ -75,7 +75,7 @@ Für die Vorstellung lässt sich ein Knoten mit `POST /admin/isolate` vom Netz t
 #abschnitt_von("Gergö")
 
 
-===== Tests
+==== Tests
 
 Die Wahl ist mit Unit-Tests über das simulierte Netz abgedeckt (`tests/test_raft.py`, verkürzte Zeiten von 0,15 bis 0,3 s): Es wird genau ein Leader gewählt und bleibt stabil, nach einem Absturz folgt ein neuer in höherem Term, ein isolierter Leader tritt zurück, und eine Minderheitspartition wählt keinen Leader. Ein Test mit mehreren Zufalls-Seeds prüft, dass es in keinem Term zwei Leader gibt. `tests/test_raft_server.py` prüft dieselben Abläufe über die echten HTTP-Endpunkte, `tests/test_raft_cluster.py` die Wahl zusammen mit der Replikation während einer laufenden Partie. Der Ende-zu-Ende-Test (`tests/test_e2e.py`) startet alle Dienste als Prozesse, beendet mitten in der Partie den Leader und prüft, dass der nächste Zug ohne Fehler beim Spieler ankommt.
 
