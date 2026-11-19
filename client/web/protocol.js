@@ -57,24 +57,62 @@ export async function resolveEndpoints(loc = window.location) {
   return {
     ws: gatewayUrl(loc, gateway),
     control: control.replace(/\/$/, ""),
-    invite: inviteBase(loc, gateway, config),
+    gateway,
+    invite: inviteTargets(loc, gateway, config),
   };
+}
+
+// /api/config neu abfragen: Die Netzwerkadressen des Hosts ändern sich, wenn er
+// das Netz wechselt (z. B. vom WLAN auf den Hotspot), ohne dass die Seite neu lädt.
+export async function fetchConfig() {
+  try {
+    const response = await fetch("/api/config", { cache: "no-store", signal: AbortSignal.timeout(1500) });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 const isLoopback = (host) => host === "localhost" || host.startsWith("127.") || host === "[::1]" || host === "::1";
 
-// Basis für Einladungslinks: immer das Gateway (den Leitstand erreichen andere
-// Rechner nicht), und statt 127.0.0.1/localhost die LAN-Adresse des Hosts.
-// { base: "http://192.168.1.20:8000", reachable: bool, reason?: "local" | "no-ip" }
-export function inviteBase(loc, gateway, config) {
+// Welche Art Netz steckt hinter einer IPv4-Adresse? Nur für die Beschriftung.
+export function networkLabel(ip) {
+  const [a, b, c, d] = ip.split(".").map(Number);
+  if (a === 100 && b >= 64 && b <= 127) return "Tailscale";
+  if (a === 192 && b === 168 && c === 137) return "Windows-Hotspot dieses Rechners";
+  if (a === 172 && b === 20 && c === 10) return "iPhone-Hotspot";
+  if (a === 169 && b === 254) return "ohne Netz (link-local)";
+  if (a === 172 && b >= 16 && b <= 31 && d === 1) return "vermutlich virtuell (WSL/Hyper-V/Docker)";
+  if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return "WLAN / Hotspot";
+  return "WLAN / LAN (Internetverbindung)";
+}
+
+const UNLIKELY = ["vermutlich virtuell (WSL/Hyper-V/Docker)", "ohne Netz (link-local)"];
+
+// Einladungsadressen: immer das Gateway (den Leitstand erreichen andere Rechner
+// nicht), statt 127.0.0.1/localhost jede Netzwerkadresse des Hosts. Die erste
+// ist die wahrscheinlichste (Standardroute), virtuelle Adapter stehen hinten.
+// { links: [{base, ip, label}], reachable: bool, reason?: "local" | "no-ip" }
+export function inviteTargets(loc, gateway, config) {
   const target = new URL(`${loc.protocol}//${gateway}`);
-  const lanIp = config?.lan_ips?.[0];
-  if (isLoopback(target.hostname)) {
-    if (!lanIp) return { base: target.origin, reachable: false, reason: "no-ip" };
-    target.hostname = lanIp;
+  const port = target.port ? `:${target.port}` : "";
+  const ips = config?.lan_ips ?? [];
+  const hosts = isLoopback(target.hostname) ? ips : [target.hostname, ...ips.filter((ip) => ip !== target.hostname)];
+  const links = hosts.map((ip) => ({ ip, base: `${target.protocol}//${ip}${port}`, label: networkLabel(ip) }));
+  // Eigener Hotspot zuerst (Mitspieler hängen dann fast sicher darin), virtuelle Adapter zuletzt.
+  const rank = (link) => (link.label.startsWith("Windows-Hotspot") ? -1 : UNLIKELY.includes(link.label) ? 1 : 0);
+  links.sort((x, y) => rank(x) - rank(y));
+  if (!links.length) {
+    return { links: [{ ip: target.hostname, base: target.origin, label: "nur dieser Rechner" }], reachable: false, reason: "no-ip" };
   }
-  if (config?.public === false) return { base: target.origin, reachable: false, reason: "local" };
-  return { base: target.origin, reachable: true };
+  if (config?.public === false) return { links, reachable: false, reason: "local" };
+  return { links, reachable: true };
+}
+
+// Kompatibel zu älterem Aufruf: nur die wahrscheinlichste Adresse.
+export function inviteBase(loc, gateway, config) {
+  const { links, reachable, reason } = inviteTargets(loc, gateway, config);
+  return { base: links[0].base, reachable, reason };
 }
 
 export class QueensClient {

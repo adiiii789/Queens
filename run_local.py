@@ -38,6 +38,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -176,6 +177,26 @@ class Backend:
                 return result
             time.sleep(0.1)
         return None
+
+
+# --- Ports ----------------------------------------------------------------------------
+def port_in_use(port: int, timeout: float = 0.3) -> bool:
+    """Lauscht auf 127.0.0.1:<port> schon etwas, z. B. eine noch laufende Instanz?"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(timeout)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def busy_ports(backend: "Backend", control_port: int = 0) -> list[tuple[int, str]]:
+    """Belegte Ports als (Port, Dienst). Wichtig unter Windows: Dort startet ein
+    zweites Gateway auf 0.0.0.0:8000 auch dann, wenn ein altes 127.0.0.1:8000
+    belegt. Mitspieler und Host landen dann bei verschiedenen Gateways und sehen
+    die Züge der anderen nicht mehr (Spiel „nicht synchron“)."""
+    label = {"raft": "Raft-Knoten {}", "lobby": "Lobby {}", "gateway": "Gateway"}
+    wanted = [(urlsplit(s.url).port, label[s.kind].format(s.name)) for s in backend.services.values()]
+    if control_port:
+        wanted.append((control_port, "Leitstand"))
+    return [(port, name) for port, name in wanted if port and port_in_use(port)]
 
 
 # --- Datenbank ------------------------------------------------------------------------
@@ -449,6 +470,18 @@ def main(argv: Optional[list[str]] = None) -> int:
               file=sys.stderr)
         return 2
     backend = Backend(args)
+
+    busy = busy_ports(backend, args.control_port)
+    if busy:
+        ports = ", ".join(f"{port} ({name})" for port, name in busy)
+        numbers = ",".join(str(port) for port, _ in busy)
+        print(f"Ports schon belegt: {ports}\n"
+              "Vermutlich läuft Queens noch (anderes Fenster, PyCharm oder ein über das X "
+              "geschlossenes Fenster).\nDort erst beenden ('quit', Strg+C bzw. Stop in PyCharm). "
+              "Welche Prozesse es sind (PowerShell):\n"
+              f"  Get-NetTCPConnection -State Listen -LocalPort {numbers} | "
+              "% { Get-Process -Id $_.OwningProcess }", file=sys.stderr)
+        return 1
 
     error = check_database(backend.dsn)
     if error is not None:

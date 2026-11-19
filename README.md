@@ -11,10 +11,18 @@ Dienste lassen sich dort auch starten und stoppen (Tab „Server“).
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
-python run_local.py --open   # alles starten, Browser öffnet http://127.0.0.1:8080/
-python hotseat.py            # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
-pytest                       # Tests (DB-Tests brauchen PostgreSQL, s. u.)
+python run_local.py --public --open   # alles starten, Browser öffnet http://127.0.0.1:8080/
+python hotseat.py                     # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
+pytest                                # Tests (DB-Tests brauchen PostgreSQL, s. u.)
 ```
+
+- `--public`: Mitspieler auf anderen Rechnern (WLAN, Handy-Hotspot) können
+  beitreten. Ohne `--public` ist das Spiel nur auf diesem Rechner erreichbar.
+- `--open`: öffnet den Browser.
+- In PyCharm: in der Run-Konfiguration von `run_local.py` unter „Parameters“
+  `--public --open` eintragen.
+- Keine Adminrechte nötig. Nur **einmal** starten – läuft noch eine ältere
+  Instanz, bricht `run_local.py` mit „Ports schon belegt“ ab.
 
 Python ≥ 3.10. Die Spiellogik selbst braucht keine externen Pakete.
 
@@ -131,8 +139,8 @@ Die Endpunkte und Nachrichten stehen in den Docstrings von
 ### Im Browser (empfohlen)
 
 ```bash
-python run_local.py --open          # startet alles, öffnet den Leitstand
-python run_local.py --no-autostart  # nur Leitstand; Dienste im Tab „Server“ starten
+python run_local.py --public --open          # startet alles, öffnet den Leitstand
+python run_local.py --public --no-autostart  # nur Leitstand; Dienste im Tab „Server“ starten
 ```
 
 `http://127.0.0.1:8080/` (Leitstand) oder `http://127.0.0.1:8000/` (Gateway)
@@ -151,8 +159,10 @@ zeigen denselben Client. Jeder Browser-Tab ist ein eigener Spieler.
   Der Leitstand lauscht nur auf `127.0.0.1`, steuern geht also nur am
   Host-Rechner. Port ändern mit `--control-port`, `0` schaltet ihn ab.
 - Mit `--public` spielen andere Rechner über `http://<IP-des-Hosts>:8000/` mit.
-  „Link kopieren“ setzt dafür automatisch die LAN-IP des Hosts und Port 8000
-  ein (nicht 127.0.0.1 bzw. den Leitstand-Port 8080).
+  „Link kopieren“ setzt dafür automatisch die IP des Hosts und Port 8000
+  ein (nicht 127.0.0.1 bzw. den Leitstand-Port 8080). Klappt der Link nicht,
+  stehen unter „Andere Adressen“ in der Lobby alle Adressen des Hosts
+  (WLAN/Hotspot, Tailscale) zum Kopieren.
 
 ### Im Terminal
 

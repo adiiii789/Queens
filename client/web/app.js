@@ -4,7 +4,7 @@
 // Oberfläche hebt lediglich hervor, was gerade sinnvoll anklickbar ist.
 // Fehler des Servers erscheinen als Hinweis. Die Texte entsprechen client/render.py.
 
-import { QueensClient, resolveEndpoints, session } from "./protocol.js";
+import { QueensClient, fetchConfig, inviteTargets, resolveEndpoints, session } from "./protocol.js";
 import { createAdmin } from "./admin.js";
 
 const REVEAL_MS = 3000; // angesehene Karten nur kurz aufdecken („wie am echten Tisch“)
@@ -435,7 +435,10 @@ function renderLobby() {
   $("lobby-start").hidden = Boolean(l);
   $("lobby-room").hidden = !l;
   if (!l) return;
-  $("lobby-code").textContent = l.lobby_id;
+  if ($("lobby-code").textContent !== l.lobby_id) {
+    $("lobby-code").textContent = l.lobby_id;
+    renderInviteList();
+  }
   $("lobby-status").textContent = `${LOBBY_STATUS[l.status] ?? l.status} · Instanz ${l.served_by ?? "?"}`;
   $("lobby-players").replaceChildren(...l.players.map((p) => el("li", { className: p.ready ? "ready" : "" },
     el("span", { className: "dot" }),
@@ -618,11 +621,43 @@ function newRound() {
 }
 
 // --- Einladung ----------------------------------------------------------------------
-// Zeigt aufs Gateway unter der LAN-Adresse des Hosts, nicht auf 127.0.0.1.
-function inviteLink(code) {
-  const url = new URL(endpoints.invite.base + "/");
+// Zeigt aufs Gateway unter einer Netzwerkadresse des Hosts, nicht auf 127.0.0.1.
+function inviteLink(code, base = endpoints.invite.links[0].base) {
+  const url = new URL(base + "/");
   url.searchParams.set("lobby", code);
   return url.toString();
+}
+
+// Adressen frisch holen: Der Host kann inzwischen das Netz gewechselt haben.
+async function refreshInvite() {
+  const config = await fetchConfig();
+  if (config) endpoints.invite = inviteTargets(window.location, endpoints.gateway, config);
+  renderInviteList();
+}
+
+function renderInviteList() {
+  const list = $("invite-list");
+  if (!ui.lobby || !list) return;
+  list.replaceChildren(...endpoints.invite.links.map((target) => {
+    const link = inviteLink(ui.lobby.lobby_id, target.base);
+    const copy = el("button", { className: "btn ghost small", type: "button", textContent: "Kopieren" });
+    copy.addEventListener("click", () => copyText(link));
+    return el("li", {},
+      el("div", {},
+        el("code", { textContent: link }),
+        el("div", { className: "muted small", textContent: target.label })),
+      copy);
+  }));
+}
+
+async function copyText(link) {
+  try {
+    await navigator.clipboard.writeText(link);
+    toast(`Einladungslink kopiert: ${link}`, "good");
+  } catch {
+    // Zwischenablage gibt es nur über https/localhost, z. B. nicht über http://<LAN-IP>
+    window.prompt("Einladungslink kopieren:", link);
+  }
 }
 
 const INVITE_WARNING = {
@@ -641,15 +676,12 @@ function clearInviteParam() {
 
 async function copyInvite() {
   if (!ui.lobby) return;
-  const link = inviteLink(ui.lobby.lobby_id);
-  try {
-    await navigator.clipboard.writeText(link);
-    toast(`Einladungslink kopiert: ${link}`, "good");
-  } catch {
-    // Zwischenablage gibt es nur über https/localhost, z. B. nicht über http://<LAN-IP>
-    window.prompt("Einladungslink kopieren:", link);
-  }
+  await refreshInvite();
+  await copyText(inviteLink(ui.lobby.lobby_id));
   if (!endpoints.invite.reachable) toast(INVITE_WARNING[endpoints.invite.reason], "warn");
+  else if (endpoints.invite.links.length > 1) {
+    toast("Klappt der Link nicht? Unter „Andere Adressen“ stehen alle Adressen dieses Rechners.");
+  }
 }
 
 // --- Tabs ---------------------------------------------------------------------------
@@ -684,6 +716,7 @@ $("ready").addEventListener("click", () => {
 });
 $("leave").addEventListener("click", () => client.leaveLobby());
 $("copy-link").addEventListener("click", copyInvite);
+$("invite-more").addEventListener("toggle", () => { if ($("invite-more").open) refreshInvite(); });
 $("deck").addEventListener("click", () => client.drawFromDeck());
 $("discard").addEventListener("click", onDiscardPile);
 $("discard-drawn").addEventListener("click", () => client.discardDrawn());

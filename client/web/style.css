@@ -112,6 +112,12 @@ main { padding: 1rem; max-width: 1280px; margin: 0 auto; }
 .divider { display: flex; align-items: center; gap: .75rem; color: var(--muted); }
 .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .lobby-code-row { display: flex; justify-content: center; align-items: center; gap: .75rem; margin: .25rem 0; }
+.invite-more { max-width: 460px; margin: .4rem auto 0; text-align: left; font-size: .9rem; }
+.invite-more summary { cursor: pointer; color: var(--muted); text-align: center; }
+.invite-more p { margin: .5rem 0; }
+.invite-list { list-style: none; margin: 0; padding: 0; }
+.invite-list li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; margin: .35rem 0; background: var(--panel-2); }
+.invite-list code { word-break: break-all; font-size: .82rem; }
 .lobby-code { font-size: 2.6rem; font-weight: 800; letter-spacing: .25em; color: var(--accent); font-family: ui-monospace, Menlo, monospace; }
 .lobby-players { list-style: none; padding: 0; margin: 1rem auto; max-width: 360px; text-align: left; }
 .lobby-players li { display: flex; align-items: center; gap: .6rem; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 10px; margin: .4rem 0; background: var(--panel-2); }
