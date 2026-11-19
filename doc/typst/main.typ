@@ -44,7 +44,7 @@
     ),
   ),
   abgabedatum: abgabedatum,
-  bearbeitungszeitraum: "05.12.2026 - 08.12.2026",
+  bearbeitungszeitraum: "05.10.2026 - 22.11.2026",
   martikelnummer: "5337368 ♠, 4898576 ♥, 1306243 ♦, \n                                                                 7200707 ♣",
   kurs: "TINF24IN",
   gutachter: "Sören Gutbrod"
