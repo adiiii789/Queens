@@ -1,6 +1,7 @@
 #import "include/templates.typ": abschnitt_von
 
-Das Frontend ist ein Browser-Client ohne Framework und ohne Build-Schritt.
+
+Das Frontend ist ein Browser-Client.
 Es besteht aus einer HTML-Seite, einem Stylesheet und drei JavaScript-Modulen in `client/web/`.
 Das Gateway liefert diese Dateien zusammen mit dem WebSocket-Endpunkt aus, sodass Spielende nur eine Adresse im Browser öffnen müssen.
 Spielregeln enthält der Client bewusst nicht: Ob eine Aktion gültig ist, entscheidet ausschließlich der Server.
@@ -8,7 +9,7 @@ Spielregeln enthält der Client bewusst nicht: Ob eine Aktion gültig ist, entsc
 #abschnitt_von("Jannis")
 
 
-==== Aufbau
+=== Aufbau
 
 - `protocol.js` kapselt die Verbindung zum Gateway (`QueensClient`). Jede Aktion erhält eine eigene `action_id`, damit Wiederholungen nach einem Verbindungsabbruch nicht doppelt ausgeführt werden. Das Modul enthält keinen DOM-Zugriff und lässt sich daher für andere Oberflächen wiederverwenden.
 - `app.js` zeichnet Anmeldung, Lobby, Spieltisch und Auflösung aus den Nachrichten des Gateways.
@@ -21,7 +22,7 @@ Jede Sicht trägt eine Versionsnummer, veraltete Sichten verwirft der Client.
 #abschnitt_von("Jannis")
 
 
-==== Lobby und Spieltisch
+=== Lobby und Spieltisch
 
 In der Lobby (@frontend-lobby) erstellen Spielende eine Partie oder treten über einen vierstelligen Code bei.
 „Link kopieren“ erzeugt einen Einladungslink mit der Netzwerkadresse des Host-Rechners, sodass Mitspielende ohne weitere Einrichtung beitreten können.
@@ -46,7 +47,7 @@ Ein Zeitbalken zeigt die verbleibende Zugzeit, Tastaturkürzel ergänzen die Bed
 #abschnitt_von("Jannis")
 
 
-==== Leitstand
+=== Leitstand
 
 Der Tab „Server“ (@frontend-leitstand) zeigt den Zustand aller Raft-Knoten (Rolle, Term, Log-Länge, Commit-Index), der Lobby-Instanzen, des Gateways und der Datenbank.
 Einzelne Dienste lassen sich dort hart beenden oder vom Netz isolieren, sodass sich Leader-Wahl und Ausfallverhalten während einer laufenden Partie vorführen lassen.
