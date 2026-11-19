@@ -7,8 +7,8 @@
 
 #let abgabedatum = datetime(
   year: 2026,
-  month: 12,
-  day: 08,
+  month: 11,
+  day: 22,
 )
 
 
@@ -46,7 +46,8 @@
   abgabedatum: abgabedatum,
   bearbeitungszeitraum: "05.12.2026 - 08.12.2026",
   martikelnummer: "5337368 ♠, 4898576 ♥, 1306243 ♦, \n                                                                 7200707 ♣",
-  kurs: "TINF24IN"
+  kurs: "TINF24IN",
+  gutachter: "Sören Gutbrod"
 )
 
 ////////////////////////////////
