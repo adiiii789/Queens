@@ -291,7 +291,8 @@ Ich versichere, dass ich die mit meinem Namen gekennzeichneten Abschnitte und
 Komponenten selbstständig erstellt und keine anderen als die angegebenen Quellen und
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
-- [Werkzeug] für [Zweck] (bzw. ‚keine‘).
+- ChatGPT Codex für die Umsetzung der P4-Komponenten, Testentwicklung und
+  Testausführung sowie für Entwurf und Überarbeitung der P4-Dokumentation.
 
 #linebreak()
 #linebreak()

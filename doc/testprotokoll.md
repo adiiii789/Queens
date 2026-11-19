@@ -135,3 +135,55 @@ und die Partie startet.
 - [ ] Test auf mehreren Rechnern (Hotspot oder Tailscale): drei Raft-Knoten auf
       drei Rechnern, Zeit bis zum neuen Leader erneut messen
 - [x] Gleichzeitiges Bereitmelden über zwei Lobby-Instanzen (P2), siehe Abschnitt 3
+
+## 6. Log-Replikation und Ergebnisspeicherung (P4)
+
+**Verantwortlich** ist Luca Hertfelder. Die P4-Komponenten umfassen
+`Replication`, `GameStateMachine`, `ClusterClient`, die Client-HTTP-Routen
+und `ResultWriter` samt Anschluss im Game-Service und Weitergabe von
+`--db` im Startskript.
+
+**Prüfstand vom 10.11.2026** war Commit `e243e20` auf
+`feature/Raft_Log&Consistency`. Die Tests liefen auf macOS mit Apple
+Silicon, Python 3.13 und einer temporären PostgreSQL-18.6-Instanz.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Gesamte Testsuite mit echter PostgreSQL | 123 bestanden |
+| Ende-zu-Ende-Test mit echter PostgreSQL, einschließlich Ergebnisprüfung | 10 aufeinanderfolgende Läufe bestanden |
+| Leader-Ausfall während einer Partie und Fortsetzung auf dem neuen Leader | bestanden |
+| Leer gestarteter Knoten übernimmt Log und Spielzustand | bestanden |
+| Isolierter Leader bestätigt keine neue Aktion und übernimmt nach Rückkehr das aktuelle Log | bestanden |
+| Ungültige Aktion oder fehlende Aktions-ID verlängert das Log nicht | bestanden |
+| Doppelte Aktion verändert den Spielzustand genau einmal | bestanden |
+| Heartbeat bestätigt keinen ungeprüften Log-Rest | bestanden |
+| Mehrheit für einen Eintrag eines älteren Terms führt nicht direkt zum Commit | bestanden |
+| Leader-Wechsel nach Spielende vor dem Datenbankschreiben | genau eine Partie mit allen Spielerzeilen und korrekten Ergebnissen |
+| PostgreSQL nach Aufbau des Pools stoppen, Partie beenden, PostgreSQL starten | Spiel lief weiter, ausstehendes Ergebnis wurde gespeichert |
+
+Die Komponententests in `tests/test_raft_replication.py` verwenden
+Test-Doubles für Rolle und Transport. `tests/test_raft_cluster.py` prüft
+zusätzlich P3s echte Leader-Wahl mit P4s Replikation.
+`tests/test_raft_client.py` deckt Leader-Hinweise, unveränderte Aktions-IDs
+und die HTTP-Routen ab. `tests/test_raft_results.py` simuliert Datenbankausfall,
+Leader-Wechsel und doppelte Schreibversuche.
+
+Für den Speicherversuch im gemeinsamen `tests/test_e2e.py` wird die Tabelle
+`games` vor dem letzten Spielzug exklusiv gesperrt. Der Leader wird nach
+Spielende beendet, bevor er das Ergebnis speichern kann. Nach Freigabe der
+Sperre schreibt der neue Leader. Geprüft werden der Name des Klopfenden,
+die Namen, Punkte und Gewinner aller Spieler, genau eine Partie und
+der Lobby-Status `finished`.
+
+Der separate Versuch mit tatsächlichem PostgreSQL-Neustart wurde außerhalb
+des Repositories ausgeführt. Seine Beobachtung ergänzt den automatisierten
+Komponententest. Weitere gemeinsame Messwerte vom 17.11.2026 stehen in
+Abschnitt 4. Die Ergebnisse vom 10.11.2026 beziehen sich auf den damaligen
+P4-Prüfstand.
+
+**Nachprüfung am 19.11.2026** in einer temporären Kopie des aktuellen
+Dokumentationsbranches `d1cb2a4` mit Python 3.13. Die zwölf Tests in
+`test_raft_replication.py`, `test_raft_cluster.py`,
+`test_raft_client.py` und `test_raft_results.py` bestanden in 2,93 s.
+Diese Nachprüfung verwendet das simulierte Raft-Netz, einen
+ASGI-Testtransport und das Datenbank-Test-Double.
