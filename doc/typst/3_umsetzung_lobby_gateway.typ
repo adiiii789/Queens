@@ -1,6 +1,6 @@
 #import "include/templates.typ": abschnitt_von
 
-=== Lobby, Gateway und Datenbank
+=== Lobby, Gateway und Datenbank <LobbyGatewayDatenbank>
 
 Bevor eine Partie im Game-Service läuft, müssen sich die Spieler finden, und während der Partie muss jemand die Verbindungen zu den Clients halten. Diese Aufgaben teilen sich drei Komponenten: eine zentrale PostgreSQL-Datenbank für Lobbys und Ergebnisse, ein Lobby-Service aus beliebig vielen gleichberechtigten Instanzen und ein Gateway als einziger Einstiegspunkt der Clients. Ziel war, dass der Ausfall einer Lobby-Instanz für die Spieler unsichtbar bleibt und eine Partie auch dann genau einmal startet, wenn sich die letzten Spieler gleichzeitig über verschiedene Instanzen bereit melden.
 

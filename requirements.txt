@@ -1,5 +1,6 @@
 # Tests
 pytest>=8
+httpx2>=2.0         # wird von starlette.testclient (FastAPI-TestClient) bevorzugt
 
 # Gateway / Lobby / Raft (Netzwerk-Variante)
 fastapi>=0.110

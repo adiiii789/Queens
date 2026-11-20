@@ -1,6 +1,6 @@
 #import "include/templates.typ": abschnitt_von
 
-== Lobby, Gateway und Datenbank
+== Lobby, Gateway und Datenbank <ReflexionLobbyGatewayDatenbank>
 
 Die größte Herausforderung war, eine Partie über mehrere unabhängige Instanzen hinweg genau einmal zu starten. Die naheliegende Lösung, den Zustand der Lobby im Speicher einer Instanz zu halten, hätte den Lobby-Service wieder an einen einzelnen Prozess gebunden. Stattdessen entscheidet die Datenbank: Die Zeilensperre sorgt dafür, dass genau eine Transaktion das Start-Ticket erhält. Schwieriger als erwartet war der Teil danach, denn Datenbank und Game-Service lassen sich nicht in einer Transaktion ändern. Gelöst haben wir das, indem jeder Schritt des Starts idempotent ist und eine andere Instanz einen hängenden Start einfach wiederholen darf. Dasselbe Prinzip trägt das Gateway: Weil jede Aktion eine feste `action_id` hat, sind Wiederholungen nach einem Leader-Wechsel ungefährlich.
 
