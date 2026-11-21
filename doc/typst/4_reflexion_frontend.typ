@@ -2,7 +2,7 @@
 
 == Frontend
 
-Die größte Herausforderung war, ein Spiel mit überwiegend verdeckten Karten verständlich darzustellen, obwohl der Client die Regeln nicht kennt.
+Queens ist ein Spiel mit überwiegend verdeckten Karten. Dieses verständlich darzustellen, ohne dass der Client selbst die Regeln kennt ist ein Anwendungsfall für sich.
 Er erhält nur die eigene Sicht und die Ereignisse, daher muss jede Aktion anderer Spielender aus diesen Nachrichten nachvollziehbar werden.
 Gelöst wurde das, indem der Client aus Phase und Sicht nur ableitet, was gerade anklickbar ist, und jede Ablehnung des Servers als Hinweis anzeigt.
 Verlauf und Hinweiszeile machen den Ablauf zusätzlich nachvollziehbar.

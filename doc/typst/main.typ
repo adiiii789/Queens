@@ -20,7 +20,7 @@
   margin: (inside: 2.5cm, outside: 2.5cm, y: 2.5cm)
 )
 #set text(
-  size: 14pt,
+  size: 13pt,
   lang: "de"
 )
 
@@ -177,10 +177,10 @@
 // ABKÜRZUNGS-VERZEICHNIS
 ////////////////////////////////
 
-#main_heading("Abkürzungsverzeichnis")
+// #main_heading("Abkürzungsverzeichnis")
 
 // #include "abkürzungen.typ"
-#pagebreak()
+// #pagebreak()
 
 ////////////////////////////////
 
@@ -271,8 +271,8 @@ Ich versichere, dass ich die mit meinem Namen gekennzeichneten Abschnitte und
 Komponenten selbstständig erstellt und keine anderen als die angegebenen Quellen und
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
-- Microsoft 365 Copilot (GPT-5.6 Sol) für das Erstellen und Formatieren der Anforderungs-Tabellen in @anforderungen.
-- Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen, Angleichung von @frontend zu Projektcode/Implementierung.
+- Microsoft 365 Copilot (GPT-5.6 Sol) für das Erstellen und Formatieren der Anforderungs-Tabelle in @anforderungen.
+- Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen. Ebenfalls Angleichung von @frontend zu Projektcode/Implementierung.
 
 #linebreak()
 #linebreak()
@@ -306,7 +306,6 @@ Folgende KI-Werkzeuge habe ich genutzt:
 #h(4cm)
 #overline("Luca Hertfelder                            ")
 ]
-#pagebreak()
 
 ////////////////////////////////
 
@@ -316,7 +315,7 @@ Folgende KI-Werkzeuge habe ich genutzt:
 // ANHANG
 ////////////////////////////////
 
-#main_heading("Anhang")
+// #main_heading("Anhang")
 
-#set heading(numbering: "A.1.1 -")
-#counter(heading).update(0)
+// #set heading(numbering: "A.1.1 -")
+// #counter(heading).update(0)

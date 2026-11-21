@@ -1,13 +1,14 @@
 #import "include/templates.typ": abschnitt_von
 
-= Anforderungen <anforderungen>
+= Anforderungen
 
 Die folgenden Anforderungen beschreiben die benötigten Funktionen und Qualitätsmerkmale des Prototyps.
 Sie dienen zugleich als Grundlage für die spätere Überprüfung durch Tests und Ausfalldemonstrationen.
 
-== Funktionale Anforderungen
+== Funktionale Anforderungen <anforderungen>
 
-#table(
+#figure(
+table(
   columns: (0.8fr, 3.2fr, 3fr),
   inset: 5pt,
   table.header([*ID*], [*Anforderung*], [*Akzeptanzkriterium*]),
@@ -21,7 +22,9 @@ Sie dienen zugleich als Grundlage für die spätere Überprüfung durch Tests un
   [FA-08], [Jede Person erhält eine individuelle Spieleransicht.], [Verdeckte Kartenwerte anderer Personen werden nicht übertragen.],
   [FA-09], [Öffentliche und private Ereignisse werden getrennt verteilt.], [Private Karteneinsichten erreichen nur die berechtigte Person.],
   [FA-10], [Nach Rundenende wird das Ergebnis berechnet und gespeichert.], [Die Kartenwerte werden ausgewertet und das Ergebnis an die Persistenz übergeben.],
-)
+),
+  caption: [Funktionale Anforderungen],
+) <FA>
 
 Das Gateway übernimmt Verbindung und Weiterleitung, entscheidet jedoch nicht über die Gültigkeit einer Aktion.
 Diese Verantwortung liegt bei der Spiel-Engine.
@@ -40,7 +43,8 @@ Diese Reihenfolge erleichtert die Zuordnung der Anforderungen zu den später bes
 
 == Nicht-funktionale Anforderungen
 
-#table(
+#figure(
+table(
   columns: (0.8fr, 1.5fr, 3fr, 2.7fr),
   inset: 5pt,
   table.header([*ID*], [*Merkmal*], [*Anforderung*], [*Prüfung oder Grenze*]),
@@ -52,7 +56,9 @@ Diese Reihenfolge erleichtert die Zuordnung der Anforderungen zu den später bes
   [NA-06], [Vertraulichkeit], [Clients erhalten keine unzulässigen verdeckten Kartenwerte.], [Vergleich der Ansichten verschiedener Personen.],
   [NA-07], [Wartbarkeit], [Engine, Gateway, Lobby und Raft besitzen getrennte Verantwortlichkeiten.], [Komponenten können isoliert getestet oder ausgetauscht werden.],
   [NA-08], [Testbarkeit], [Zustandsübergänge und verteilte Abläufe sind reproduzierbar prüfbar.], [Feste Seeds sowie Unit-, Integrations- und Ende-zu-Ende-Tests.],
-)
+),
+  caption: [Nicht-funktionale Anforderungen],
+) <NA>
 
 Konsistenz wird gegenüber dauerhafter Schreibverfügbarkeit priorisiert.
 Ein Cluster aus drei Knoten benötigt zwei erreichbare Knoten und toleriert damit einen Ausfall.
@@ -75,4 +81,4 @@ Während einer Leader-Neuwahl ist eine kurze Unterbrechung zulässig, da zunäch
 Eine Aktion darf in dieser Phase lieber verzögert oder abgelehnt als mehrfach oder in unterschiedlicher Reihenfolge bestätigt werden.
 Damit folgt auch das Reaktionsverhalten der Priorisierung von Konsistenz gegenüber uneingeschränkter Verfügbarkeit.
 
-#abschnitt_von("Jannis")
+#abschnitt_von("Luca")

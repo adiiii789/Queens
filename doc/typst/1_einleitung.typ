@@ -9,7 +9,7 @@ Ein digitales Mehrspielerspiel muss räumlich getrennten Clients einen gemeinsam
 Treffen mehrere Aktionen fast gleichzeitig ein, benötigt das System eine eindeutige Reihenfolge.
 Jede Aktion muss gegenüber dem aktuellen Zustand geprüft und die daraus entstehende Änderung konsistent an die beteiligten Clients verteilt werden.
 
-Das Kartenspiel „Queens“ verbindet rundenbasierte Züge mit spontanen Aktionen.
+Das Kartenspiel "Queens" verbindet rundenbasierte Züge mit spontanen Aktionen.
 Beim Zwischenwerfen dürfen auch Personen handeln, die aktuell nicht am Zug sind.
 Dadurch können konkurrierende Eingaben entstehen.
 Zusätzlich liegen die meisten Karten verdeckt.
@@ -25,7 +25,7 @@ Ein Client übermittelt lediglich die gewünschte Aktion.
 Ob diese zulässig ist und welche Folgen sie hat, entscheidet das Backend.
 Dadurch lässt sich vermeiden, dass unterschiedliche Programmstände oder manipulierte Eingaben zu abweichenden Spielverläufen führen.
 
-Als konkreter Anwendungsfall macht „Queens“ die Eigenschaften eines verteilten Systems unmittelbar sichtbar.
+Als konkreter Anwendungsfall macht "Queens" die Eigenschaften eines verteilten Systems unmittelbar sichtbar.
 Eine Leader-Wahl kann während einer laufenden Partie demonstriert werden, während die Spielenden anschließend mit demselben Zustand fortfahren.
 Gleichzeitig lässt sich anhand verdeckter Karten prüfen, ob die technische Verteilung nicht nur verfügbar und konsistent, sondern auch fachlich korrekt erfolgt.
 
@@ -34,7 +34,7 @@ Gleichzeitig lässt sich anhand verdeckter Karten prüfen, ob die technische Ver
 
 == Zielsetzung und Abgrenzung
 
-Ziel ist die prototypische Umsetzung von „Queens“ als browserbasiertes Mehrspielerspiel für zwei bis acht Personen.
+Ziel ist die prototypische Umsetzung von "Queens" als browserbasiertes Mehrspielerspiel für zwei bis acht Personen.
 Lobbys ermöglichen das Erstellen und Betreten einer Partie sowie die Verwaltung des Bereitschaftsstatus.
 Während des Spiels übermittelt ein Realtime-Gateway die Aktionen der Clients an das Backend.
 Dort werden sie validiert, durch den Raft-Cluster geordnet und von einer deterministischen Spiel-Engine verarbeitet.
@@ -57,16 +57,16 @@ Entscheidend ist, dass die gewählte Architektur die geforderten Zustandsüberg�
 #abschnitt_von("Jannis")
 
 
-== Spielprinzip von „Queens"
+== Spielprinzip von "Queens"
 
-„Queens“ wird mit 52 Karten und zwei bis acht Personen gespielt.
+"Queens" wird mit 52 Karten und zwei bis acht Personen gespielt.
 Jede Person erhält vier verdeckte Karten und darf zu Beginn einmalig zwei davon ansehen.
 Ziel ist eine möglichst niedrige Summe der eigenen Kartenwerte.
 
 Das Grundprinzip ist mit Kartenspielen wie „Biberbande“ und „CABO“ vergleichbar.
 Auch dort liegen vier Karten verdeckt vor jeder Person, nur ein Teil der eigenen Karten ist zu Beginn bekannt und Karten mit hohen Werten sollten durch niedrigere ersetzt werden.
 Der Spielverlauf verbindet dadurch Glück mit einem Gedächtniselement: Die Spielenden müssen sich bekannte Kartenwerte und spätere Positionsänderungen merken.
-„Queens“ übernimmt dieses grundlegende Prinzip, setzt mit einem klassischen 52-Karten-Blatt, dem jederzeit möglichen Zwischenwerfen sowie den eigenen Sonderaktionen jedoch andere Schwerpunkte.
+"Queens" übernimmt dieses grundlegende Prinzip, setzt mit einem klassischen 52-Karten-Blatt, dem jederzeit möglichen Zwischenwerfen sowie den eigenen Sonderaktionen jedoch andere Schwerpunkte.
 Der Vergleich dient daher der Einordnung des Spieltyps und bedeutet keine vollständige Regelgleichheit.
 
 Im regulären Zug wird eine Karte vom Zieh- oder Ablagestapel aufgenommen.

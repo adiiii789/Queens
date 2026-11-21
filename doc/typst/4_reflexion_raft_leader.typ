@@ -2,7 +2,7 @@
 
 == Leader-Wahl und Integration
 
-Die größte Herausforderung war die enge Grenze zwischen Leader-Wahl und Log-Replikation. Beide Teile greifen auf denselben Zustand zu: Die Wahl braucht den letzten Log-Eintrag, die Replikation muss bei einem höheren Term die Rolle wechseln, und das Check-Quorum braucht die Antwortzeiten der Replikation. Gelöst haben wir das, indem wir die gegenseitigen Methodenaufrufe vor Beginn festgelegt und in getrennte Dateien gelegt haben. Mit dem Heartbeat-Platzhalter ließ sich die Wahl testen, bevor die Replikation fertig war; beim Zusammenführen der Branches gab es keine Konflikte, und die gemeinsamen Tests liefen ohne Änderungen am Code durch.
+Die größte Herausforderung hier war die enge Grenze zwischen Leader-Wahl und Log-Replikation. Beide Teile greifen auf denselben Zustand zu: Die Wahl braucht den letzten Log-Eintrag, die Replikation muss bei einem höheren Term die Rolle wechseln, und das Check-Quorum braucht die Antwortzeiten der Replikation. Gelöst haben wir das, indem wir die gegenseitigen Methodenaufrufe vor Beginn festgelegt und in getrennte Dateien gelegt haben. Mit dem Heartbeat-Platzhalter ließ sich die Wahl testen, bevor die Replikation fertig war; beim Zusammenführen der Branches gab es keine Konflikte, und die gemeinsamen Tests liefen ohne Änderungen am Code durch.
 
 Eine zweite Schwierigkeit waren zeitabhängige Tests. Leader-Wahlen hängen vom Zufall und von Zeitabständen ab, und erste Versionen der Tests schlugen gelegentlich fehl, weil sie feste Pausen statt eines Zustands abwarteten. Stabil wurden sie erst, als jeder Test auf eine Bedingung wartet (etwa „genau ein Leader, den alle kennen“) und das Netz im Unit-Test simuliert wird. Der Ende-zu-Ende-Test lief danach zehnmal hintereinander fehlerfrei.
 
