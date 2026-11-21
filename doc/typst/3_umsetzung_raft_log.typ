@@ -1,202 +1,93 @@
 #import "include/templates.typ": abschnitt_von
 
-#pagebreak(weak: true)
+=== Game-Service: Log-Replikation und Ergebnisspeicherung <raft-replikation>
 
-#[
-#set text(font: "Arial", size: 11pt)
-#set par(leading: 0.65em, spacing: 0.65em, justify: true)
+Die Leader-Wahl sorgt dafür, dass es einen zuständigen Knoten gibt. Damit ist aber noch keine Spielaktion sicher: Erst die Log-Replikation stellt sicher, dass jede Aktion auf einer Mehrheit der Knoten liegt, bevor sie gilt, und dass alle Knoten die Aktionen in derselben Reihenfolge auf die Spiellogik anwenden. Raft beschreibt dieses Prinzip als replizierte Zustandsmaschine @ongaro2014raft. Dieser Abschnitt beschreibt, wie der Leader Befehle entgegennimmt, verteilt und bestätigt, wie Lobby und Gateway den Cluster ansprechen und wie am Ende einer Partie das Ergebnis in die Datenbank kommt.
 
-=== Game-Service - Log-Replikation und Ergebnisspeicherung <p4-replikation>
+#abschnitt_von("Luca")
 
-P4 umfasst die geordnete Verarbeitung der Spielbefehle im Raft-Cluster und die
-Speicherung abgeschlossener Partien. Der Leader nimmt Befehle entgegen,
-repliziert sie auf die Follower und liefert das Ergebnis nach dem Commit und
-dem Anwenden auf die Spiellogik zurück. Die Umsetzung folgt dem Prinzip der
-replizierten Zustandsmaschine aus @ongaro2014raft. Die Ergebnisspeicherung aus
-Commit `e243e20` ist inzwischen auch in `develop` enthalten.
 
-#abschnitt_von("Luca Hertfelder (P4)")
+==== Aufbau
 
-==== Komponenten und Schnittstellen
+Auch dieser Teil liegt in `services/raft/` und ist auf wenige Dateien verteilt:
 
-Die P4-Implementierung liegt in `services/raft/`. `replication.py` verwaltet
-Log, Commit-Index und Replikatoren. `state_machine.py` verbindet das Log mit
-P1s deterministischer Queens-Engine. `client.py` stellt den gemeinsamen
-`ClusterClient` für Lobby und Gateway bereit, und `client_routes.py` enthält
-die HTTP-Endpunkte für Schreib- und Leseanfragen. `results.py` übernimmt die
-Ergebnisspeicherung als Hintergrundaufgabe.
+- `replication.py` verwaltet das Log, den Commit-Index und je Follower einen Replikator.
+- `state_machine.py` verbindet das Log mit der deterministischen Spiel-Engine von Jannis.
+- `client.py` enthält den `ClusterClient`, über den Lobby und Gateway den Cluster ansprechen, und `client_routes.py` die zugehörigen HTTP-Endpunkte.
+- `results.py` speichert beendete Partien im Hintergrund in PostgreSQL.
 
-P3s Knoten stellt Rolle, Term und Transport bereit. Beim Amtsantritt ruft er
-`on_become_leader()` auf, beim Verlust der Leader-Rolle `fail_pending()`.
-Für Wahlanfragen liest er über `last_index` und `term_at(index)` den
-Log-Stand. Die Replikation meldet gültige Leader-Nachrichten über
-`accept_leader()` und höhere Terms über `step_down()`. Für Check-Quorum
-führt sie die Antwortzeitpunkte je Follower in `peer_last_response`.
-P2s `ResultRepository` bildet die Schnittstelle zur PostgreSQL-Datenbank.
+Die Schnittstelle zu Gergös Leader-Wahl haben wir vorab gemeinsam festgelegt. Sein Knoten stellt Rolle, Term und Transport bereit, ruft beim Amtsantritt `on_become_leader()` und beim Rücktritt `fail_pending()` auf und liest für die Abstimmung über `last_index` und `term_at(index)` den Stand des Logs. In die andere Richtung meldet die Replikation einen gültigen Leader mit `accept_leader()` und einen höheren Term mit `step_down()`. Für das Check-Quorum hält sie in `peer_last_response` fest, wann jeder Follower zuletzt geantwortet hat. Für die Datenbank nutzt die Ergebnisspeicherung das `ResultRepository` von Adrian.
+
+#abschnitt_von("Luca")
+
 
 ==== Log und Replikatoren
 
-Jeder Log-Eintrag enthält `term` und `command`. Die Indizes beginnen bei 1,
-Index 0 mit Term 0 bezeichnet den virtuellen Anfang des Logs. `commit_index`
-markiert den bestätigten Bereich, `last_applied` den bereits angewendeten.
-Für jeden Follower hält der Leader einen nächsten Sendeindex
-(`next_index`) und den zuletzt bestätigten Index (`match_index`).
+Ein Log-Eintrag besteht aus `term` und `command`. Die Indizes beginnen bei 1; Index 0 mit Term 0 steht für den leeren Anfang des Logs, damit auch der erste Eintrag einen Vorgänger hat, gegen den geprüft werden kann. `commit_index` markiert, bis wohin das Log bestätigt ist, `last_applied`, bis wohin es schon auf die Spiellogik angewendet wurde. Für jeden Follower merkt sich der Leader, welchen Eintrag er als Nächstes schicken muss (`next_index`) und bis wohin der Follower bestätigt hat (`match_index`).
 
-Nach der Wahl initialisiert der Leader diese Werte, hängt einen `NoOp` mit
-seinem aktuellen Term an und startet je Follower einen asynchronen Replikator.
-Ein Replikator sendet höchstens 200 Einträge je `AppendEntries`, zusammen
-mit Index und Term des vorherigen Eintrags sowie dem Commit-Index des Leaders.
-Neue Befehle wecken die Tasks über `asyncio.Event`. Im Leerlauf warten sie
-standardmäßig 0,3 s und senden anschließend einen Heartbeat.
+Sobald ein Knoten Leader wird, setzt er diese Werte zurück, hängt einen `NoOp`-Eintrag mit seinem Term an und startet für jeden Follower einen eigenen asynchronen Replikator. Ein Replikator schickt mit jedem `AppendEntries` bis zu 200 Einträge, dazu Index und Term des vorherigen Eintrags und den Commit-Index des Leaders. Kommt ein neuer Befehl hinzu, weckt ein `asyncio.Event` die Replikatoren sofort; passiert nichts, senden sie nach 0,3 s einen leeren Heartbeat.
 
-Der Follower lehnt Nachrichten aus einem kleineren Term ab. Andernfalls
-übernimmt er den Leader und prüft, ob der vorherige Eintrag zu seinem Log
-passt. Bei einem Widerspruch liefert er einen `conflict_index`, bis zu dem
-der Leader zurückspringen kann. Abweichende, unbestätigte Einträge werden
-abgeschnitten und durch die Einträge des Leaders ersetzt. Ein leer neu
-gestarteter Knoten kann so das gesamte Log nachholen.
+Der Follower lehnt Nachrichten aus einem älteren Term ab. Sonst erkennt er den Absender als Leader an und prüft, ob der vorherige Eintrag zu seinem eigenen Log passt. Passt er nicht, antwortet er mit einem `conflict_index`, sodass der Leader mehrere Einträge auf einmal zurückspringen kann, statt sich Eintrag für Eintrag heranzutasten. Abweichende, noch nicht bestätigte Einträge schneidet der Follower ab und ersetzt sie durch die des Leaders. Auf diesem Weg holt auch ein Knoten, der mit leerem Log neu startet, das gesamte Log nach.
 
-Ein Heartbeat darf nur den tatsächlich verglichenen Log-Bereich bestätigen.
-Der Follower begrenzt seinen neuen Commit-Index deshalb auf den vorherigen
-Index zuzüglich der Zahl empfangener Einträge. Ein noch ungeprüftes,
-abweichendes Log-Ende wird dadurch vorzeitigem Anwenden entzogen.
+Eine Feinheit betrifft den Heartbeat: Er darf nur den Teil des Logs bestätigen, der tatsächlich verglichen wurde. Hat ein Follower hinter dieser Stelle noch alte, abweichende Einträge, darf er sie nicht anwenden, nur weil der Commit-Index des Leaders größer ist. Der Follower begrenzt seinen Commit-Index deshalb auf den vorherigen Index plus die Zahl der mitgeschickten Einträge.
 
-==== Commit-Regel und Verarbeitung
+#abschnitt_von("Luca")
 
-Ein Index darf auf dem Leader direkt bestätigt werden, wenn ihn eine
-Mehrheit einschließlich des Leaders repliziert hat und der Eintrag aus dem
-aktuellen Term stammt. Frühere Einträge werden über einen späteren Commit
-mitbestätigt. Diese Term-Bedingung verhindert die im Raft-Paper erläuterte
-Fehlentscheidung nach Leader-Wechseln. Der `NoOp` schafft unmittelbar nach
-dem Amtsantritt einen Eintrag des aktuellen Terms. @ongaro2014raft
 
-Alle Knoten wenden bestätigte Einträge in Indexreihenfolge an. Ein wartender
-Client erhält das Ergebnis des zugehörigen Eintrags über ein Future.
-Ausnahmen werden protokolliert und als `internal` gemeldet, während der
-Knoten weitere Einträge verarbeiten kann.
+==== Commit und Verarbeitung von Befehlen
 
-`submit(command)` serialisiert Schreibanfragen mit einem
-`asyncio.Lock`. Vor der Vorabprüfung wartet es, bis das bisherige Log
-angewendet ist. Das umfasst nach einer Wahl den `NoOp` und nach einem
-Timeout eventuell noch ausstehende Befehle. Anschließend prüft die
-Zustandsmaschine den neuen Befehl, hängt ihn bei Erfolg an und weckt die
-Replikatoren. Standardmäßig stehen für diesen Ablauf einschließlich des
-Wartens höchstens fünf Sekunden zur Verfügung.
+Der Leader bestätigt einen Index, sobald eine Mehrheit einschließlich ihm selbst den Eintrag gespeichert hat und der Eintrag aus dem aktuellen Term stammt. Ältere Einträge werden nur indirekt mitbestätigt, wenn ein späterer Eintrag committet wird. Ohne diese Bedingung könnte ein Eintrag als bestätigt gelten und nach einem weiteren Leader-Wechsel trotzdem überschrieben werden; das Raft-Paper zeigt diesen Fall ausführlich @ongaro2014raft. Der `NoOp` direkt nach der Wahl sorgt dafür, dass es sofort einen Eintrag aus dem aktuellen Term gibt und ältere Einträge nicht liegen bleiben.
 
-Geht die Mehrheit verloren, kann der Leader einen neuen Befehl nicht
-bestätigen. Bei Ablauf der Frist entsteht ein `CommitTimeout`. Bei einem
-Rollenwechsel werden die Replikatoren abgebrochen und wartende Aufrufe
-beenden sich mit `NotLeader` und der bekannten Leader-Adresse.
+Alle Knoten wenden bestätigte Einträge streng in Indexreihenfolge an. Wartet ein Client auf einen Eintrag, bekommt er das Ergebnis über ein Future. Wirft das Anwenden eine Ausnahme, wird sie protokolliert und als Fehler `internal` zurückgegeben; der Knoten arbeitet mit den nächsten Einträgen weiter.
+
+Schreibanfragen laufen über `submit(command)` und werden mit einem `asyncio.Lock` nacheinander abgearbeitet. Bevor ein neuer Befehl geprüft wird, wartet der Leader, bis sein bisheriges Log vollständig angewendet ist. Nach einer Wahl betrifft das den `NoOp`, nach einem Timeout unter Umständen auch einen Befehl, der noch nachträglich committet wurde. Nur so prüft die Zustandsmaschine gegen den wirklich aktuellen Spielstand. Ist der Befehl gültig, wird er angehängt und die Replikatoren werden geweckt. Für den ganzen Ablauf einschließlich der Wartezeit hat der Leader standardmäßig fünf Sekunden.
+
+Fehlt dem Leader die Mehrheit, kann er den Befehl nicht bestätigen, und nach Ablauf der Frist kommt ein `CommitTimeout` zurück. Verliert er seine Rolle, werden die Replikatoren abgebrochen und alle wartenden Anfragen enden mit `NotLeader` und der Adresse des bekannten Leaders.
+
+#abschnitt_von("Luca")
+
 
 ==== Zustandsmaschine und wiederholte Anfragen
 
-`GameStateMachine` verarbeitet drei Befehlstypen. `NoOp` verändert kein
-Spiel. `CreateGame` legt eine Partie mit eindeutiger `game_id` an,
-wiederholtes Anlegen derselben Partie liefert Erfolg.
-`Action` deserialisiert eine Spielaktion und übergibt sie nach dem Commit an
-`queens_engine.apply`. Die Antwort enthält Ereignisse mit Empfängerkreis und
-die getrennten Sichten aller Spieler mit ihrer `version`. Das Gateway
-übernimmt anschließend die Verteilung.
+Die `GameStateMachine` kennt drei Befehle. `NoOp` ändert nichts. `CreateGame` legt eine Partie mit eindeutiger `game_id` an; wird dieselbe Partie noch einmal angelegt, ist das ebenfalls ein Erfolg. `Action` enthält eine Spielaktion, die nach dem Commit an `queens_engine.apply` geht. Die Antwort enthält die entstandenen Ereignisse mit ihrem Empfängerkreis und die Sicht jedes Spielers mit ihrer `version`; wer welche Teile bekommt, entscheidet danach das Gateway.
 
-Die Vorabprüfung erkennt unbekannte Partien, ungültige Spielerlisten und
-Regelverstöße. Solche Befehle verlängern das Log nicht. Jede Aktion muss
-eine feste, nicht leere `action_id` besitzen. Die Engine führt bereits
-verarbeitete IDs im Spielzustand mit. Eine erneute Anfrage liefert Erfolg,
-die aktuelle Sicht und eine leere Ereignisliste. So entstehen weder ein
-zweiter Zustandsübergang noch erneut ausgelieferte Ereignisse.
+Schon vor dem Anhängen prüft die Zustandsmaschine, ob die Partie existiert, die Spielerliste gültig ist und die Aktion den Regeln entspricht. Ungültige Befehle kommen gar nicht erst ins Log. Jede Aktion braucht außerdem eine feste, nicht leere `action_id`. Die Engine merkt sich die bereits verarbeiteten IDs im Spielzustand. Kommt dieselbe Aktion noch einmal, etwa weil ein Client nach einem Timeout wiederholt, gibt es eine Erfolgsmeldung mit der aktuellen Sicht und einer leeren Ereignisliste. Die Aktion wird also nicht zweimal ausgeführt und ihre Ereignisse werden nicht doppelt verteilt.
 
-Eine fehlende Aktions-ID wird vor dem Anhängen zurückgewiesen, weil die
-Engine sonst beim Deserialisieren lokal eine UUID erzeugen könnte.
-Unterschiedliche IDs auf den Knoten würden den replizierten Zustand
-auseinanderlaufen lassen. Auch der Seed von `StartGame` wird als
-Zeichenfolge geprüft und als Teil des Befehls repliziert.
+Fehlt die Aktions-ID, wird der Befehl abgelehnt. Andernfalls würde die Engine beim Einlesen selbst eine UUID erzeugen, und zwar auf jedem Knoten eine andere, sodass die Spielzustände auseinanderlaufen. Aus demselben Grund muss der Seed von `StartGame` eine Zeichenfolge sein und wird als Teil des Befehls mitrepliziert, statt auf den Knoten erzeugt zu werden.
+
+#abschnitt_von("Luca")
+
 
 ==== Cluster-Client und Lesezugriffe
 
-Der `ClusterClient` merkt sich die zuletzt erfolgreiche Knotenadresse,
-folgt einem `not_leader`-Hinweis und probiert bei Verbindungsproblemen
-weitere konfigurierte Knoten. Bei `timeout` versucht er denselben Befehl
-erneut. Nach insgesamt 15 s meldet er `ClusterUnavailable`.
-Die Aktions-ID bleibt über alle Versuche erhalten.
+Der `ClusterClient` merkt sich den Knoten, der zuletzt erfolgreich geantwortet hat. Antwortet ein Knoten mit `not_leader`, folgt der Client dem mitgeschickten Leader-Hinweis; bei Verbindungsfehlern probiert er die übrigen Knoten. Ein `timeout` wird genauso behandelt: Der Client versucht es erneut, bis ein Knoten den Befehl bestätigt. Nach insgesamt 15 s gibt er mit `ClusterUnavailable` auf. Die Aktions-ID bleibt über alle Versuche gleich, sodass ein Befehl auch dann nur einmal ausgeführt wird, wenn ein früherer Versuch doch noch committet wurde.
 
-Die HTTP-Anbindung stellt `POST /client/submit` und
-`GET /client/views/{game_id}` bereit. `NotLeader` und
-`CommitTimeout` werden auf die vereinbarten JSON-Antworten abgebildet.
-Ein Lesezugriff wartet zunächst auf den angewendeten `NoOp` und
-anschließend auf frische Antworten einer Mehrheit. Ein abgetrennter
-bisheriger Leader kann dadurch keine veraltete Sicht als erfolgreiche
-Leseantwort ausgeben.
+Nach außen bietet jeder Knoten `POST /client/submit` und `GET /client/views/{game_id}` an. `NotLeader` und `CommitTimeout` werden dort auf die vereinbarten JSON-Antworten abgebildet. Auch das Lesen der Sichten läuft über den Leader: Er wartet zunächst, bis sein `NoOp` angewendet ist, und dann auf frische Antworten einer Mehrheit. So kann ein abgeschnittener alter Leader, der sich noch für zuständig hält, keine veraltete Sicht als gültig ausliefern.
+
+#abschnitt_von("Luca")
+
 
 ==== Spielergebnisse und Datenbankausfälle
 
-Der `ResultWriter` durchsucht den angewendeten Spielzustand nach Partien
-mit Phase `finished`. Er prüft jeweils Rolle und Term und schreibt während
-der Leader-Rolle die noch ausstehenden Ergebnisse. Eine lokale Menge
-`saved` verhindert wiederholte Schreibversuche desselben Knotens nach
-erfolgreicher Speicherung. Zwischen den Durchläufen wartet der Task eine
-Sekunde.
+Der `ResultWriter` läuft als Hintergrundaufgabe in jedem Game-Service, ist aber nur auf dem Leader aktiv. Jede Sekunde durchsucht er den angewendeten Spielzustand nach Partien in der Phase `finished`, die noch nicht gespeichert sind. Vor jeder Partie prüft er erneut Rolle und Term, damit ein gerade abgesetzter Leader nicht weiterschreibt. Was dieser Knoten erfolgreich gespeichert hat, merkt er sich in der Menge `saved`.
 
-Pro Partie übergibt er `game_id`, den Namen des Klopfenden und je Spieler
-ID, Name, Punkte und Gewinnerstatus an `ResultRepository.save()`. P2s
-Repository schreibt Partie und Spielergebnisse in einer Transaktion und
-setzt den Lobby-Status auf `finished`. Die Eindeutigkeit von `game_id`
-und `ON CONFLICT DO NOTHING` fangen erneute Schreibversuche nach einem
-Leader-Wechsel ab. @pg-insert
+Je Partie übergibt er die `game_id`, den Namen des Klopfenden und für jeden Spieler ID, Name, Punkte und ob er gewonnen hat an `ResultRepository.save()`. Adrians Repository schreibt Partie und Spielergebnisse in einer Transaktion und setzt die Lobby auf `finished`. Weil `game_id` eindeutig ist und mit `ON CONFLICT DO NOTHING` gespeichert wird @pg-insert, landet eine Partie auch dann nur einmal in der Datenbank, wenn nach einem Leader-Wechsel der neue Leader sie noch einmal schreibt.
 
-Bei einer nicht erreichbaren Datenbank protokolliert der Writer eine
-Warnung. Die Partie bleibt ausstehend und wird nach der nächsten
-Wartephase erneut versucht. Die Datenbankoperation liegt außerhalb des
-Commit-Pfads, sodass laufende Partien währenddessen weiterlaufen können.
-Ein neuer Leader besitzt denselben bestätigten Spielzustand und findet
-die beendete Partie auch dann, wenn der vorherige Leader vor dem Schreiben
-abgestürzt ist.
+Ist die Datenbank nicht erreichbar, schreibt der Writer eine Warnung ins Log und versucht es eine Sekunde später erneut. Da das Speichern außerhalb des Commit-Pfads liegt, laufen andere Partien währenddessen ungestört weiter. Stürzt der Leader ab, bevor er das Ergebnis geschrieben hat, ist das ebenfalls kein Problem: Der neue Leader hat denselben bestätigten Spielzustand und findet die beendete Partie selbst.
 
-P4 ergänzt im Game-Service den optionalen Parameter `--db` und die
-Verwaltung des Writers im FastAPI-Lebenszyklus. Beim Herunterfahren wird
-zuerst der Writer beendet und sein Datenbankpool geschlossen, anschließend
-werden Knoten und Transport beendet. Das Startskript `run_local.py`
-reicht die konfigurierte Datenbankadresse an jeden Raft-Prozess weiter.
-Bei direktem Start ohne `--db` wird der Writer ausgelassen.
+Damit das funktioniert, hat der Game-Service den optionalen Parameter `--db` bekommen, und der Writer wird im Lebenszyklus der FastAPI-Anwendung gestartet und beendet. Beim Herunterfahren wird zuerst der Writer gestoppt und sein Datenbankpool geschlossen, danach Knoten und Transport. `run_local.py` gibt die Datenbankadresse an jeden Raft-Prozess weiter. Fehlt `--db`, läuft der Game-Service ohne Ergebnisspeicherung; so bleiben die Raft-Tests unabhängig von PostgreSQL.
 
-==== Tests und Nachweise <p4-tests>
+#abschnitt_von("Luca")
 
-Die sechs Tests in `test_raft_replication.py` steuern die Leader-Rolle
-gezielt über Test-Doubles. Sie prüfen übereinstimmende Logs und
-Spielzustände, Leader-Ausfall mit Fortsetzung der Partie, einen leeren
-Neustart, Isolation und Korrektur eines abweichenden Logs, ungültige und
-doppelte Aktionen sowie das Aufwecken wartender Anfragen beim Rücktritt.
-Zwei gezielte Regressionstests decken den ungeprüften Log-Rest bei einem
-Heartbeat und die Commit-Regel für ältere Terms ab.
 
-`test_raft_client.py` prüft Leader-Hinweise, unveränderte Aktions-IDs und
-die HTTP-Routen über einen ASGI-Testtransport.
-`test_raft_results.py` simuliert einen Datenbankausfall und einen
-Leader-Wechsel. Es kontrolliert die Wiederholung, das Verwerfen doppelter
-Schreibversuche sowie Namen, Punkte und Gewinner.
-Die gemeinsamen Tests in `test_raft_cluster.py` verwenden P3s echte
-Knoten mit P4s Replikation und automatischer Wahl in einem simulierten Netz.
+==== Tests <raft-replikation-tests>
 
-Der gemeinsame Ende-zu-Ende-Test startet Raft, Lobby und Gateway als
-Prozesse und verbindet zwei WebSocket-Clients. Der P4-Beitrag prüft die
-Fortsetzung nach einem Leader-Absturz, das Nachholen des Logs und die
-Ergebnisspeicherung durch den neuen Leader. Für den letzten Fall hält der
-Test eine exklusive Sperre auf der Tabelle `games`, beendet die Partie
-und anschließend den Leader. Erst nach Freigabe der Tabelle kann dessen
-Nachfolger das Ergebnis schreiben. Geprüft werden genau eine Partie,
-sämtliche Spielerzeilen, die Ergebniswerte und der Lobby-Status.
+`tests/test_raft_replication.py` enthält sechs Tests, die die Leader-Rolle über Test-Doubles gezielt steuern. Geprüft wird, dass nach einem Leader-Ausfall die Partie weiterläuft, eine doppelt eingereichte Aktion nur einmal angewendet wird und ein leer neu gestarteter Knoten dasselbe Log und denselben Spielzustand erreicht. Weitere Tests zeigen, dass ein isolierter Leader nichts bestätigen kann und sein abweichendes Log nach der Rückkehr ersetzt wird, dass ungültige Aktionen und Aktionen ohne ID das Log nicht verlängern und dass wartende Anfragen beim Rücktritt sofort enden. Zwei davon sind Regressionstests für die oben beschriebenen Sonderfälle: den ungeprüften Log-Rest beim Heartbeat und die Commit-Regel für Einträge aus älteren Terms.
 
-Im Prüfstand vom 10.11.2026 auf macOS mit Apple Silicon, Python 3.13 und
-einer temporären PostgreSQL-18.6-Instanz bestanden alle 123 Tests des
-P4-Stands `e243e20`. Der vollständige Ende-zu-Ende-Test war zehnmal
-hintereinander erfolgreich. Ein separater Versuch stoppte PostgreSQL
-nach Aufbau des Verbindungspools, beendete die laufende Partie und
-startete PostgreSQL erneut. Anschließend wurde das ausstehende Ergebnis
-gespeichert. Die späteren gemeinsamen Messungen zum Datenbankausfall vom
-17.11.2026 sind im Testprotokoll und in @tab-db-ausfall dokumentiert.
+`tests/test_raft_client.py` prüft, dass der Client Leader-Hinweisen folgt und die Aktions-ID unverändert lässt, und testet die HTTP-Routen über einen ASGI-Testtransport. `tests/test_raft_results.py` spielt eine Partie zu Ende, simuliert einen Datenbankausfall und einen anschließenden Leader-Wechsel und prüft, dass das Ergebnis nachgeholt, doppelte Schreibversuche verworfen und Namen, Punkte und Gewinner richtig übergeben werden. In `tests/test_raft_cluster.py` laufen Gergös echte Knoten mit der Replikation und automatischer Wahl zusammen in einem simulierten Netz.
 
-Bei der Dokumentationsprüfung am 19.11.2026 bestanden die zwölf Tests
-für Replikation, Cluster-Anbindung, Client und ResultWriter erneut.
+Der gemeinsame Ende-zu-Ende-Test (`tests/test_e2e.py`) startet Raft-Knoten, Lobby und Gateway als echte Prozesse und spielt mit zwei WebSocket-Clients. Für die Replikation ist dabei wichtig, dass die Partie nach einem Leader-Absturz weiterläuft und der neu gestartete Knoten das Log aufholt. Der schwierigste Fall ist die Ergebnisspeicherung durch einen neuen Leader: Dafür sperrt der Test die Tabelle `games` exklusiv, beendet die Partie und dann den Leader. Erst nach der Freigabe kann der Nachfolger das Ergebnis schreiben. Am Ende muss genau eine Partie mit allen Spielerzeilen, richtigen Punkten und Lobby-Status `finished` in der Datenbank stehen.
 
-#abschnitt_von("Luca Hertfelder (P4)")
+Am 10.11.2026 liefen auf macOS (Apple Silicon, Python 3.13) mit einer temporären PostgreSQL-18.6-Instanz alle 123 Tests des damaligen Stands fehlerfrei durch, der vollständige Ende-zu-Ende-Test zehnmal hintereinander. In einem eigenen Versuch wurde PostgreSQL gestoppt, nachdem der Verbindungspool aufgebaut war, dann die laufende Partie beendet und PostgreSQL wieder gestartet; das ausstehende Ergebnis wurde danach gespeichert. Die gemeinsamen Messungen zum Datenbankausfall vom 17.11.2026 stehen in @tab-db-ausfall. Bei der Durchsicht der Dokumentation am 19.11.2026 liefen die zwölf Tests für Replikation, Cluster, Client und `ResultWriter` erneut ohne Fehler.
 
-]
+#abschnitt_von("Luca")

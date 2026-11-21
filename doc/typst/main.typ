@@ -286,20 +286,26 @@ Folgende KI-Werkzeuge habe ich genutzt:
 #linebreak()
 #linebreak()
 
+// Erklärung und Unterschriftszeile zusammenhalten, damit die Zeile nicht
+// allein auf eine neue Seite rutscht und in die Kopfzeile ragt.
+#block(breakable: false)[
 Ich versichere, dass ich die mit meinem Namen gekennzeichneten Abschnitte und
 Komponenten selbstständig erstellt und keine anderen als die angegebenen Quellen und
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
-- ChatGPT Codex für die Umsetzung der P4-Komponenten, Testentwicklung und
-  Testausführung sowie für Entwurf und Überarbeitung der P4-Dokumentation.
+- ChatGPT Codex für die Testentwicklung und Testausführung im Bereich
+  Log-Replikation und Ergebnisspeicherung.
+- Anthropic Claude (Opus 5.5) für das Umformulieren und die Prüfung der
+  Rechtschreibung in @raft-replikation und @ReflexionRaftReplikation.
 
 #linebreak()
 #linebreak()
 
 #set overline(offset: -2em)
 #overline("Ort, Datum                          ")
-#h(4cm) 
+#h(4cm)
 #overline("Luca Hertfelder                            ")
+]
 #pagebreak()
 
 ////////////////////////////////
