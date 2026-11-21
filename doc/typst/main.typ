@@ -253,8 +253,8 @@ Ich versichere, dass ich die mit meinem Namen gekennzeichneten Abschnitte und
 Komponenten selbstständig erstellt und keine anderen als die angegebenen Quellen und
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
-- Anthropic Claude (Opus 5.5) für das Anpassen von Rechtschreibung, Formulierungen und formatierung von Tabellen in @LobbyGatewayDatenbank und @ReflexionLobbyGatewayDatenbank
-- Anthropic Claude (Opus 5.5) Code zum anpassen, pflegen und testen von Code (im Bereich Lobby, Gateway und Datenbank)
+- Anthropic Claude (Opus 5.5) für das Anpassen von Rechtschreibung, Formulierungen und Formatierung von Tabellen in @LobbyGatewayDatenbank und @ReflexionLobbyGatewayDatenbank
+- Anthropic Claude (Opus 5.5) Code zum Anpassen, Pflegen und Testen von Code (im Bereich Lobby, Gateway und Datenbank)
 
 #linebreak()
 #linebreak()
@@ -272,7 +272,7 @@ Komponenten selbstständig erstellt und keine anderen als die angegebenen Quelle
 Hilfsmittel verwendet habe.
 Folgende KI-Werkzeuge habe ich genutzt:
 - Microsoft 365 Copilot (GPT-5.6 Sol) für das Erstellen und Formatieren der Anforderungs-Tabelle in @anforderungen.
-- Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen. Ebenfalls Angleichung von @frontend zu Projektcode/Implementierung.
+- Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen meiner Abschnitte. Ebenfalls Angleichung von @frontend zu Projektcode/Implementierung.
 
 #linebreak()
 #linebreak()

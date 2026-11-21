@@ -78,6 +78,7 @@ Beim Ablegen bestimmter Karten kann eine Sonderaktion ausgeführt werden.
 Ein Bube erlaubt den verdeckten Tausch zweier beliebiger Karten.
 Mit einem König darf eine beliebige Karte angesehen werden.
 Die Sonderaktion kann jedoch auch übersprungen werden.
+Eine Übersicht der Karten und ihre Bedeutung ist in @sonderkarten aufgezeigt.
 
 #figure(
   table(

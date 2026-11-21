@@ -7,7 +7,7 @@
 Das System besteht aus vier Schichten (@architekturmodell): Browser- oder Terminal-Clients, ein Realtime-Gateway als einziger Einstiegspunkt, ein Lobby-Service mit gemeinsamer PostgreSQL-Datenbank und ein Game-Service-Cluster, dessen Knoten sich per Raft @ongaro2014raft auf den Spielverlauf einigen. Alle Dienste sind eigene FastAPI-Prozesse @fastapi, die intern über HTTP mit JSON und nach außen nur über die WebSockets @rfc6455 des Gateways kommunizieren.
 
 #figure(
-  image("images/architekturmodell.svg", width: 55%),
+  image("images/architekturmodell.svg", width: 75%),
   caption: [Architekturmodell]
 ) <architekturmodell>
 

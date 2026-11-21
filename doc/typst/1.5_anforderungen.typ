@@ -7,6 +7,8 @@ Sie dienen zugleich als Grundlage für die spätere Überprüfung durch Tests un
 
 == Funktionale Anforderungen <anforderungen>
 
+Die funktionalen Anforderungen sind in @FA aufgezeigt. 
+
 #figure(
 table(
   columns: (0.8fr, 3.2fr, 3fr),
@@ -42,6 +44,8 @@ Diese Reihenfolge erleichtert die Zuordnung der Anforderungen zu den später bes
 
 
 == Nicht-funktionale Anforderungen
+
+Ebenso sind die nicht-funktionalen Anforderungen in @NA aufgezeigt. 
 
 #figure(
 table(
