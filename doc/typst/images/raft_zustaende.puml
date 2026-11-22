@@ -1,0 +1,24 @@
+@startuml raft_zustaende
+' Zustände eines Raft-Knotens (services/raft/node.py, election.py)
+' Rendern: plantuml -tsvg raft_zustaende.puml  ->  raft_zustaende.svg
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam state {
+  BackgroundColor #E1F5EE
+  BorderColor #0F6E56
+}
+
+[*] --> Follower : Start\n(Term und Stimme\naus --data-dir)
+
+Follower --> Candidate : Election-Timeout\n(zufällig 1,5–3 s)\nohne AppendEntries
+Candidate --> Candidate : Timeout ohne Mehrheit\n(Split Vote): neuer Term
+Candidate --> Leader : Stimmen einer Mehrheit\n(n // 2 + 1)
+Candidate --> Follower : AppendEntries des Leaders\noder höherer Term
+Leader --> Follower : höherer Term in einer Antwort\noder Check-Quorum:\n3 s keine Mehrheit erreichbar
+
+Follower : setzt Timer bei gültigem\nAppendEntries und abgegebener Stimme zurück
+Follower : stimmt einmal pro Term, nur für\nKandidaten mit aktuellem Log
+Candidate : Term + 1, Stimme für sich,\nRequestVote parallel an alle
+Leader : No-Op im neuen Term,\nHeartbeats alle 0,3 s,\nprüft Quorum alle 20 ms
+@enduml

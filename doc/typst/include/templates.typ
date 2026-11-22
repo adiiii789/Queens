@@ -95,6 +95,7 @@
   text("\nBearbeitungszeitraum:                            " + bearbeitungszeitraum)
   text("\nMartikelnummer:                                    " + martikelnummer)
   text("\nKurs:                                                        " + kurs)
+  text("\nGutacher:                                                 " + gutachter)
   
   set page(header: none)
   pagebreak()

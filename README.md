@@ -1,80 +1,154 @@
 # Queens – verteiltes Mehrspieler-Kartenspiel
 
-Projekt im Modul Verteilte Systeme (DHBW Stuttgart).
+Programmentwurf im Modul Verteilte Systeme (T4INF3301), DHBW Stuttgart.
 
-**Stand:** Die Spiellogik ist vollständig und getestet. Gateway, Lobby, Raft
-und Frontend sind als Platzhalter mit klaren Schnittstellen angelegt.
+Das Kartenspiel „Queens“ für 2–8 Spieler wird im Browser gespielt. Der
+Spielzustand liegt in einem Raft-Cluster (Standard: 3 Knoten), die Lobbys
+laufen auf mehreren zustandslosen Instanzen, Ergebnisse und Lobbydaten liegen
+in PostgreSQL. Ein Gateway verbindet die Browser per WebSocket.
 
-## Schnellstart
+Die schriftliche Dokumentation steht in `doc/typst/` (Einstieg: `main.typ`).
+
+---
+
+## 1. Voraussetzungen
+
+| Software | Version | Zweck |
+| --- | --- | --- |
+| Python | ≥ 3.10 | alle Dienste |
+| PostgreSQL | ≥ 13 | Lobbys und Spielergebnisse (am einfachsten per Docker) |
+| Browser | aktuell | Spieloberfläche |
+
+## 2. Installation
+
+Alle Befehle im Projektordner ausführen.
+
+**Schritt 1 – Virtuelle Umgebung anlegen und Pakete installieren**
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Linux / macOS:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
-python cli.py          # Spiel im Terminal testen (Hotseat, 2–8 Spieler)
-pytest                 # Unit-Tests der Spiellogik
 ```
 
-Python ≥ 3.10. Die Spiellogik selbst braucht keine externen Pakete.
+> Blockiert PowerShell das Aktivierungsskript, einmalig
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` ausführen.
 
-## Struktur
+**Schritt 2 – PostgreSQL bereitstellen**
 
-```
-queens_engine/            Spiellogik – FERTIG
-  config.py               Regelvarianten (Handgröße, Klopf-Sperre, Strafkarte)
-  models.py               Karte, Spieler, GameState, create_game()
-  actions.py              Aktionen + Serialisierung (für Netzwerk / Raft-Log)
-  rules.py                validate(): Regelprüfung je Phase
-  engine.py               apply(): Zustandsübergänge, deterministisch
-  scoring.py              Punktewertung
-  views.py                player_view(): was ein Spieler sehen darf
-  events.py               Ereignisse mit Empfängerkreis (alle / ein Spieler)
+Erwartet werden Benutzer `queens`, Passwort `queens` und die Datenbanken
+`queens` (Betrieb) und `queens_test` (Tests) auf `127.0.0.1:5432`. Die Tabellen
+legen die Dienste beim Start selbst an.
 
-services/
-  backend.py              GameBackend-Schnittstelle + LocalGameBackend – FERTIG
-  gateway/app.py          PLATZHALTER: FastAPI + WebSockets
-  lobby/app.py            PLATZHALTER: Lobby, Ready-Status
-  raft/node.py            PLATZHALTER: Raft-Knoten + RaftGameBackend
+*Variante A – Docker (empfohlen):*
 
-frontend/                 PLATZHALTER: Browser-Client
-cli.py                    Terminal-Testmodus
-tests/test_engine.py      Unit-Tests
+```bash
+docker run -d --name queens-pg -p 5432:5432 -e POSTGRES_USER=queens -e POSTGRES_PASSWORD=queens -e POSTGRES_DB=queens postgres:16-alpine
+docker exec queens-pg psql -U queens -c "CREATE DATABASE queens_test"
 ```
 
-## Architekturprinzip
+Später reicht `docker start queens-pg`, um die Datenbank wieder zu starten.
 
-Die Engine ist eine **deterministische Zustandsmaschine**:
-`apply(state, action) -> (new_state, events)`. Kein Netzwerk, keine Uhrzeit,
-Zufall nur über den Seed in `StartGame`. Dadurch können später alle
-Raft-Replikate dieselben bestätigten Aktionen in derselben Reihenfolge anwenden
-und erreichen denselben Zustand.
+*Variante B – lokale PostgreSQL-Installation* (als Superuser, z. B. `psql -U postgres`):
 
-Das Gateway kennt nur `GameBackend`. Heute: `LocalGameBackend` (Engine im
-Prozess). Später: `RaftGameBackend` (Aktionen an den Leader des Clusters).
+```sql
+CREATE USER queens WITH PASSWORD 'queens';
+CREATE DATABASE queens OWNER queens;
+CREATE DATABASE queens_test OWNER queens;
+```
 
-Gleichzeitige Aktionen (z. B. Zwischenwerfen) muss die Engine nicht lösen:
-Sie bekommt Aktionen immer nacheinander. Die Reihenfolge legt das Backend fest
-(lokal per Lock, später der Raft-Leader über das Log).
+Andere Datenbankadresse: Option `--db postgresql://user:pw@host:5432/queens`
+oder Umgebungsvariable `QUEENS_DB` (für Tests `QUEENS_TEST_DB`).
 
-## Spielregeln (umgesetzt)
+## 3. Ausführung
 
-- 2–8 Spieler, 52er-Blatt, je 4 verdeckte Karten, eine Karte offen auf der Ablage
-- Startphase: jeder sieht sich 2 eigene Karten einmalig an
-- Gespielt wird „wie am echten Tisch“: Karten bleiben verdeckt, man muss sie sich merken
-- Zug: vom Zieh- oder Ablagestapel ziehen, dann gegen eigene Karte tauschen oder ablegen
-- Wird ein Bube oder König abgelegt (auch nach Aufnahme vom Ablagestapel):
-  - Bube: zwei beliebige Karten blind tauschen
-  - König: eine beliebige Karte ansehen
-  - Sonderaktion kann übersprungen werden
-- Zwischenwerfen: jeder Spieler, jederzeit, Karte gleichen Rangs wie die oberste Ablagekarte
-  - falsch geworfen: Karte wird gezeigt, bleibt liegen, dazu eine Strafkarte
-- Klopfen statt Ziehen: alle anderen spielen noch einmal, dann wird aufgedeckt
-  - Karten des Klopfenden sind ab dann gesperrt (abschaltbar in `config.py`)
-- Werte: Dame −1, Ass 1, Zahlen nach Augenwert, Bube/König 10; niedrigste Summe gewinnt
-- Leerer Ziehstapel: Ablagestapel (ohne oberste Karte) wird neu gemischt
-- Timeout (`TurnTimeout`, vom System erzeugt): Zug wird übersprungen
+Vorher die virtuelle Umgebung aktivieren (siehe Schritt 1) und PostgreSQL starten.
 
-## Nächste Schritte
+**Alles starten**
 
-1. Gateway: WebSocket-Endpunkt mit `LocalGameBackend` umsetzen
-2. Frontend: Spieltisch im Browser
-3. Lobby-Service
-4. Raft-Knoten, danach `LocalGameBackend` durch `RaftGameBackend` ersetzen
+```bash
+python run_local.py --open
+```
+
+Damit starten 3 Raft-Knoten, 2 Lobby-Instanzen und das Gateway als eigene
+Prozesse, und der Browser öffnet `http://127.0.0.1:8080/`.
+
+**Spielen**
+
+1. Namen eingeben, „Lobby erstellen“ wählen.
+2. Weitere Spieler öffnen einen neuen Browser-Tab (jeder Tab ist ein Spieler)
+   und treten mit dem Lobby-Code bei, oder sie nutzen „Link kopieren“.
+3. Alle klicken „Bereit“, dann startet die Partie.
+
+**Ausfall vorführen**
+
+Im Tab „Server“ des Browsers oder in der Konsole, in der `run_local.py` läuft:
+
+| Befehl | Wirkung |
+| --- | --- |
+| `status` | Rolle, Term, Leader und Log aller Knoten, Lobbys, Datenbank |
+| `kill 1` / `start 1` | Raft-Knoten 1 hart beenden bzw. neu starten |
+| `kill l1` / `start l1` | Lobby-Instanz 1 beenden bzw. neu starten |
+| `isolate 1` / `heal 1` | Knoten 1 vom Netz trennen bzw. wieder verbinden |
+| `ergebnisse` | letzte Partien aus PostgreSQL |
+| `quit` | alle Dienste beenden |
+
+Die Logs der Dienste liegen in `logs/`.
+
+**Mit mehreren Rechnern spielen**
+
+Nur der Host braucht PostgreSQL und startet:
+
+```bash
+python run_local.py --public
+```
+
+Die Mitspieler installieren nichts, sie öffnen `http://<IP-des-Hosts>:8000/`
+im Browser. Auf dem Host muss die Firewall eingehende Verbindungen auf Port 8000
+zulassen. Bei Problemen helfen `python netcheck.py host` (auf dem Host) und
+`python netcheck.py client <IP-des-Hosts>` (beim Mitspieler).
+
+**Weitere Optionen**
+
+```bash
+python run_local.py --nodes 5 --lobbies 3                     # größerer Cluster
+python -m client.cli --server ws://127.0.0.1:8000/ws --name Anna   # Terminal-Client
+python hotseat.py                                             # Spiellogik ohne Netzwerk und DB testen
+```
+
+Ports: Leitstand 8080, Gateway 8000, Lobby-Instanz *i* = 8000 + *i*,
+Raft-Knoten *n* = 8100 + *n*. Alle Optionen: `python run_local.py --help`.
+
+## 4. Tests
+
+```bash
+pytest
+```
+
+Ohne erreichbare Testdatenbank `queens_test` werden die Datenbank-, Lobby- und
+Gateway-Tests übersprungen, alle anderen laufen trotzdem.
+
+## 5. Projektstruktur
+
+```
+queens_engine/    Spiellogik als deterministische Zustandsmaschine
+services/raft/    Raft-Knoten: Leader-Wahl, Log-Replikation, Zustandsmaschine
+services/lobby/   Lobby-Service (zustandslos, Daten in PostgreSQL)
+services/gateway/ Gateway: WebSockets zum Browser, leitet an Lobby und Raft weiter
+client/web/       Browser-Client (Spieltisch, Lobby, Leitstand)
+client/cli.py     Terminal-Client
+run_local.py      startet alle Dienste und die Admin-Konsole
+control.py        Leitstand im Browser (Tab „Server“)
+tests/            Unit-, Integrations- und Ende-zu-Ende-Tests
+doc/typst/        Dokumentation (Typst)
+```

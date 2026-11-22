@@ -1,13 +1,17 @@
 #import "include/templates.typ": abschnitt_von
 
 
-= Umsetzung (8 Punkte)
+= Umsetzung 
 
-== Implementierung
-=== Frontend
-=== Backend
-Jeweils:
-- Wie wird die Architektur umgesetzt?
-- Welche Schwierigkeiten gab es und wie wurden diese gelöst?
-== Mögliche Alternativen
+== Frontend <frontend>
 
+#include "3_umsetzung_frontend.typ"
+
+== Backend
+
+
+#include "3_umsetzung_lobby_gateway.typ"
+
+#include "3_umsetzung_raft_leader.typ"
+
+#include "3_umsetzung_raft_log.typ"

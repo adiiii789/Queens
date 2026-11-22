@@ -1,0 +1,16 @@
+#import "include/templates.typ": abschnitt_von
+
+== Log-Replikation und Ergebnisspeicherung <ReflexionRaftReplikation>
+
+Bekommt ein Client keine Antwort, heißt das nicht, dass sein Befehl verloren ist; er kann kurz danach trotzdem noch committet werden. Dies führt zu unklaren Ergebnissen. Wiederholt der Client dann einfach, droht eine doppelte Ausführung. Gelöst haben wir das an mehreren Stellen gleichzeitig: Die Aktions-ID bleibt bei jeder Wiederholung gleich, der Leader wendet vor der nächsten Prüfung erst sein komplettes bisheriges Log an, und die verarbeiteten IDs stehen im replizierten Spielzustand. Dadurch kennt auch ein neuer Leader alle bereits ausgeführten Aktionen und setzt den Schutz vor Duplikaten nahtlos fort.
+
+Eine zweite Schwierigkeit waren zwei Fälle, die im Raft-Paper leicht zu überlesen sind: Ein Heartbeat darf ein abweichendes Log-Ende nicht bestätigen, und eine Mehrheit allein reicht für einen Eintrag aus einem früheren Term nicht für den direkten Commit. Beide Fehler fallen im normalen Spielbetrieb kaum auf und zeigen sich erst nach bestimmten Folgen von Leader-Wechseln. Deshalb haben beide einen eigenen Regressionstest. Bei der Ergebnisspeicherung kam hinzu, dass Raft und PostgreSQL getrennte Systeme sind: Der Leader kann genau zwischen dem erfolgreichen Schreiben und dem Merken des Erfolgs ausfallen. Statt das zu verhindern, darf der Schreibversuch beliebig oft wiederholt werden, und der eindeutige Schlüssel sorgt zusammen mit der Transaktion im Repository dafür, dass die Partie trotzdem genau einmal gespeichert wird. Die Tabellensperre im Ende-zu-Ende-Test macht genau diesen Moment reproduzierbar.
+
+Mit mehr Zeit würden wir Folgendes anders machen:
+
+- *Log dauerhaft speichern.* Log und laufende Spielzustände liegen nur im Arbeitsspeicher. Ein einzelner neu gestarteter Knoten holt alles von den anderen nach, aber starten mehrere Knoten gleichzeitig neu, ist die von Raft vorausgesetzte dauerhafte Mehrheit nicht mehr gegeben, und gehen alle Kopien verloren, sind auch die laufenden Partien weg. Einträge müssten vor der Antwort an den Leader auf die Platte geschrieben und beim Start wieder eingelesen werden. Snapshots und Log-Kompaktion würden danach Speicherbedarf und Startzeit begrenzen @ongaro2014raft.
+- *Auseinanderlaufende Zustände erkennen.* Eine Ausnahme beim Anwenden hält den Knoten zwar am Laufen, repariert aber keinen abweichenden Spielzustand. Für einen echten Betrieb bräuchte es regelmäßige Zustandsvergleiche zwischen den Knoten und eine Wiederherstellung aus einem geprüften Snapshot oder dem Log.
+- *Private Ereignisse erneut zustellen.* Eine wiederholte Aktion liefert die aktuelle Sicht, aber keine Ereignisse. Geht die erste Antwort mit einem privaten Ereignis verloren, etwa dem Ansehen einer Karte, bekommt der Spieler es nicht noch einmal. Abhilfe wäre ein je Aktions-ID abrufbares Ergebnis, das nur der berechtigte Spieler lesen darf.
+- *Mehr Fehlerfälle messen.* Eine Netzwerktrennung zur Datenbank, bei der die Verbindungen nicht abgebaut werden, haben wir noch nicht gemessen; dort bestimmen die Timeouts des Pools, wie lange das Speichern dauert. Sinnvoll wären außerdem Tests mit verzögerten und verlorenen Nachrichten sowie wiederholten Neustarts, während mehrere Partien gleichzeitig laufen.
+
+#abschnitt_von("Luca")
