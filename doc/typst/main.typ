@@ -240,6 +240,7 @@ Folgende KI-Werkzeuge habe ich genutzt:
 - Anthropic Claude (Opus 5.5) Code zum Anpassen, Pflegen und Testen von Code (im Bereich Game-Service)
 
 #linebreak()
+#text(font: "Arial")[Stuttgart, 22.11.2026] 
 #linebreak()
 
 #set overline(offset: -2em)
@@ -258,6 +259,7 @@ Folgende KI-Werkzeuge habe ich genutzt:
 - Anthropic Claude (Opus 5.5) Code zum Anpassen, Pflegen und Testen von Code (im Bereich Lobby, Gateway und Datenbank)
 
 #linebreak()
+#text(font: "Arial")[Stuttgart, den 22.11.2026]
 #linebreak()
 
 #set overline(offset: -2em)
@@ -276,6 +278,7 @@ Folgende KI-Werkzeuge habe ich genutzt:
 - Microsoft 365 Copilot (GPT-5.6 Sol) für das Anpassen von Rechtschreibung und Formulierungen meiner Abschnitte. Ebenfalls Angleichung von @frontend zu Projektcode/Implementierung.
 
 #linebreak()
+#text(font: "Arial")[Lorch, den 22.11.2026]
 #linebreak()
 
 #set overline(offset: -2em)
@@ -300,6 +303,7 @@ Folgende KI-Werkzeuge habe ich genutzt:
   Rechtschreibung in @raft-replikation und @ReflexionRaftReplikation.
 
 #linebreak()
+#text(font: "Arial")[Pforzheim, 22.11.2026]
 #linebreak()
 
 #set overline(offset: -2em)
