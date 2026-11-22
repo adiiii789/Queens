@@ -1,6 +1,6 @@
 #import "include/templates.typ": abschnitt_von
 
-=== Game-Service: Leader-Wahl und Ausfallerkennung
+=== Game-Service: Leader-Wahl und Ausfallerkennung <GameService>
 
 Der Game-Service hält den Zustand aller laufenden Partien. Damit eine Partie den Ausfall eines Servers übersteht, läuft er als Cluster aus $n$ gleichberechtigten Knoten, die sich mit dem Konsensalgorithmus Raft @ongaro2014raft auf eine gemeinsame Reihenfolge der Spielaktionen einigen. Raft trennt das Problem in Leader-Wahl, Log-Replikation und Sicherheit. Dieser Abschnitt beschreibt die Leader-Wahl und die Ausfallerkennung; die Replikation des Logs ist in einem eigenen Abschnitt beschrieben. Die Clustergröße ist frei wählbar: Weil jede Entscheidung eine Mehrheit von $floor(n slash 2) + 1$ Knoten braucht, verkraftet ein Cluster $floor((n - 1) slash 2)$ Ausfälle, also drei Knoten einen und fünf Knoten zwei.
 

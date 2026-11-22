@@ -1,6 +1,6 @@
 #import "include/templates.typ": abschnitt_von
 
-== Leader-Wahl und Integration
+== Leader-Wahl und Integration <ReflexionGameService>
 
 Die größte Herausforderung hier war die enge Grenze zwischen Leader-Wahl und Log-Replikation. Beide Teile greifen auf denselben Zustand zu: Die Wahl braucht den letzten Log-Eintrag, die Replikation muss bei einem höheren Term die Rolle wechseln, und das Check-Quorum braucht die Antwortzeiten der Replikation. Gelöst haben wir das, indem wir die gegenseitigen Methodenaufrufe vor Beginn festgelegt und in getrennte Dateien gelegt haben. Mit dem Heartbeat-Platzhalter ließ sich die Wahl testen, bevor die Replikation fertig war; beim Zusammenführen der Branches gab es keine Konflikte, und die gemeinsamen Tests liefen ohne Änderungen am Code durch.
 
